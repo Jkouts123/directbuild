@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# reference repos (not part of the app)
+/ref-solar/
+/ref-hvac/
+/ref-roofing/
+/ref-grannyflats/
+/outdoorrenovationhub (Lovable)/
+
+# claude internal
+.claude/
+
+# branding source files (not served)
+app/Directbuild branding guidelines.jpg
+app/Generated Image March 22, 2026 - 2_48PM.jpg
+app/Screenshot 2026-03-22 at 2.22.53*.png

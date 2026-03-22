@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "outdoorrenovationhub (Lovable)", "ref-solar", "ref-hvac", "ref-roofing", "ref-grannyflats"]
 }
