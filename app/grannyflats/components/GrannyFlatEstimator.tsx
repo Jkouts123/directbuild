@@ -45,9 +45,8 @@ const INCLUSIONS = [
 ];
 const FLOORING_TYPES = ["Carpet", "Hybrid / laminate", "Tiles", "Polished concrete"];
 const BUDGET_OPTIONS = [
-  "$80,000 - $120,000",
-  "$120,000 - $180,000",
-  "$180,000 - $250,000",
+  "$180,000 - $220,000",
+  "$220,000 - $250,000",
   "$250,000+",
   "Not sure",
 ];

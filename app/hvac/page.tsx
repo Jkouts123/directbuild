@@ -1,39 +1,54 @@
-import { Wind } from "lucide-react";
+"use client";
+
+import { motion } from "framer-motion";
+import { Wind } from "@phosphor-icons/react";
 import HVACEstimator from "./components/HVACEstimator";
-import RevealText from "../components/RevealText";
-import RevealOnScroll from "../components/RevealOnScroll";
+
+const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
 export default function HvacPage() {
   return (
     <div>
-      {/* Hero Section */}
-      <div className="relative min-h-[420px] sm:min-h-[480px] flex items-center justify-center bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('/hero-home.jpg')" }}>
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="relative z-10 text-center max-w-2xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
-          <RevealOnScroll direction="left" delay={0}>
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-orange-safety/20 backdrop-blur-sm">
-                <Wind className="text-orange-safety" size={24} />
+      <section
+        className="relative min-h-[420px] sm:min-h-[480px] flex items-center bg-cover bg-center bg-fixed"
+        style={{ backgroundImage: "url('/hero-home.jpg')" }}
+      >
+        <div className="absolute inset-0 bg-black-deep/50" />
+        <div className="relative z-10 mx-auto max-w-[1400px] w-full px-6 sm:px-8 py-20 sm:py-28">
+          <div className="max-w-2xl">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={spring}
+              className="flex items-center gap-3 mb-4"
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-safety/20 backdrop-blur-sm">
+                <Wind size={22} weight="duotone" className="text-orange-safety" />
               </div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-lg">HVAC Estimator</h1>
-            </div>
-          </RevealOnScroll>
-          <RevealText
-            as="p"
-            className="text-white/90 max-w-2xl mx-auto text-lg drop-shadow-md"
-            delay={0.2}
-            stagger={0.02}
-          >
-            Get an instant ballpark estimate for your air conditioning project. Answer a few questions and we'll calculate typical costs based on 2026 Australian market rates.
-          </RevealText>
+              <h1 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-lg">
+                HVAC estimator
+              </h1>
+            </motion.div>
+            <motion.p
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...spring, delay: 0.15 }}
+              className="text-white/80 text-lg max-w-[55ch] leading-relaxed"
+            >
+              Get an instant ballpark estimate for your air conditioning project. Answer a few questions and we will calculate typical costs based on 2026 Australian market rates.
+            </motion.p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Estimator Section */}
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <RevealOnScroll delay={0.5}>
+        <motion.div
+          initial={{ opacity: 0, y: 32 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...spring, delay: 0.3 }}
+        >
           <HVACEstimator />
-        </RevealOnScroll>
+        </motion.div>
       </div>
     </div>
   );

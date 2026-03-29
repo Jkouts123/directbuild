@@ -256,23 +256,70 @@ export async function generateEstimate(
       : undefined,
   };
 
-  // Save to Supabase
-  try {
-    await supabase.from("leads").insert({
-      name: request.contact.firstName,
-      phone: request.contact.phone,
-      email: request.contact.email || null,
-      suburb: String(request.formData.suburb || request.formData.location_suburb || ""),
-      service_type: request.serviceType,
-      user_input: request.formData,
-      ai_quote: estimate,
-      verified_phone: true,
-      created_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    // Don't fail the quote if Supabase insert fails
-    console.error("Failed to save lead to Supabase:", err);
-  }
+  // Save to Supabase + notify n8n (non-blocking, parallel)
+  const suburb = String(request.formData.suburb || request.formData.location_suburb || "");
+
+  const saveToSupabase = supabase.from("leads").insert({
+    name: request.contact.firstName,
+    phone: request.contact.phone,
+    email: request.contact.email || null,
+    suburb,
+    service_type: request.serviceType,
+    user_input: request.formData,
+    ai_quote: estimate,
+    verified_phone: true,
+    created_at: new Date().toISOString(),
+  }).then(() => {}, (err) => console.error("Supabase insert failed:", err));
+
+  const notifyN8n = triggerN8nWebhook(request, estimate, suburb)
+    .then(() => {}, (err) => console.error("n8n webhook failed:", err));
+
+  await Promise.allSettled([saveToSupabase, notifyN8n]);
 
   return estimate;
+}
+
+// ── n8n Webhook ───────────────────────────────────────────────────────
+const N8N_ENDPOINTS: Record<ServiceType, string | undefined> = {
+  "solar": process.env.N8N_WEBHOOK_SOLAR,
+  "hvac": process.env.N8N_WEBHOOK_HVAC,
+  "landscaping": process.env.N8N_WEBHOOK_LANDSCAPING,
+  "roofing": process.env.N8N_WEBHOOK_ROOFING,
+  "granny-flats": process.env.N8N_WEBHOOK_GRANNY_FLATS,
+};
+
+async function triggerN8nWebhook(
+  request: EstimateRequest,
+  estimate: EstimateResult,
+  suburb: string,
+) {
+  const url = N8N_ENDPOINTS[request.serviceType];
+  if (!url) return;
+
+  const payload = {
+    name: request.contact.firstName,
+    phone: request.contact.phone,
+    email: request.contact.email || null,
+    suburb,
+    service_type: request.serviceType,
+    ai_quote_summary: estimate.summary,
+    min_price: estimate.minPrice,
+    max_price: estimate.maxPrice,
+    center_price: estimate.centerPrice,
+    line_items: estimate.lineItems,
+    image_urls: request.images?.length ? request.images.map((_img, i) => `uploaded-photo-${i + 1}`) : [],
+    stc_rebate: estimate.stcRebate ?? null,
+    estimated_savings: estimate.estimatedSavings ?? null,
+    timestamp: new Date().toISOString(),
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    console.error(`n8n webhook (${request.serviceType}) returned ${res.status}`);
+  }
 }

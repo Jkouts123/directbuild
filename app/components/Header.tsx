@@ -1,27 +1,27 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { List, X } from "@phosphor-icons/react";
 
 const NAV_LINKS = [
   { href: "/solar", label: "Solar" },
   { href: "/hvac", label: "HVAC" },
-  { href: "/grannyflats", label: "Granny Flats" },
+  { href: "/grannyflats", label: "Granny flats" },
   { href: "/landscaping", label: "Landscaping" },
   { href: "/roofing", label: "Roofing" },
 ];
 
 function BrandLogo() {
   return (
-    <div className="flex items-center gap-2">
-      {/* Geometric house icon matching brand guide */}
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="shrink-0">
+    <div className="flex items-center gap-2.5">
+      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" className="shrink-0">
         <rect x="4" y="14" width="24" height="16" rx="2" stroke="#FF8C00" strokeWidth="2.5" fill="none" />
         <path d="M2 16L16 4L30 16" stroke="#FF8C00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         <rect x="13" y="20" width="6" height="10" rx="1" stroke="#FF8C00" strokeWidth="2" fill="none" />
       </svg>
-      <span className="text-lg font-bold tracking-tight font-[family-name:var(--font-heading)]">
+      <span className="text-base font-semibold tracking-tight">
         <span className="text-orange-safety">direct</span>
         <span className="text-white">build</span>
       </span>
@@ -30,61 +30,69 @@ function BrandLogo() {
 }
 
 export default function Header() {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-light bg-black-deep/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between md:justify-start">
-          {/* Mobile: hamburger left */}
-          <button
-            className="md:hidden text-gray-text hover:text-orange-safety min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle menu"
-          >
-            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-
-          {/* Mobile: centered logo / Desktop: left-aligned logo */}
-          <Link
-            href="/"
-            className="absolute left-1/2 -translate-x-1/2 md:relative md:left-auto md:translate-x-0"
-          >
+    <header className="sticky top-0 z-50 glass-panel">
+      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between">
+          <Link href="/" className="relative z-10">
             <BrandLogo />
           </Link>
 
-          {/* Mobile: spacer for symmetry */}
-          <div className="w-12 md:hidden" />
-
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-8 ml-12">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-sm font-medium text-gray-text hover:text-orange-safety"
-              >
-                {link.label}
-              </Link>
-            ))}
+          <nav className="hidden md:flex items-center gap-1">
+            {NAV_LINKS.map((link) => {
+              const active = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`relative px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                    active
+                      ? "text-orange-safety bg-orange-safety/8"
+                      : "text-gray-text hover:text-white hover:bg-white/[0.04]"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </nav>
+
+          {/* Mobile toggle */}
+          <button
+            className="md:hidden text-gray-text hover:text-white min-h-[48px] min-w-[48px] flex items-center justify-center cursor-pointer active:scale-[0.95]"
+            onClick={() => setOpen(!open)}
+            aria-label="Toggle menu"
+          >
+            {open ? <X size={22} weight="bold" /> : <List size={22} weight="bold" />}
+          </button>
         </div>
       </div>
 
       {/* Mobile menu */}
-      {mobileOpen && (
-        <nav className="md:hidden border-t border-gray-light bg-black-deep">
-          <div className="px-4 py-4 space-y-1">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="flex items-center min-h-[48px] px-3 rounded-lg text-base font-medium text-gray-text hover:text-orange-safety hover:bg-gray-dark"
-                onClick={() => setMobileOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
+      {open && (
+        <nav className="md:hidden border-t border-white/[0.06] bg-navy-deep/95 backdrop-blur-md">
+          <div className="px-4 py-3 space-y-0.5">
+            {NAV_LINKS.map((link) => {
+              const active = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`flex items-center min-h-[48px] px-4 rounded-lg text-[15px] font-medium transition-colors duration-200 ${
+                    active
+                      ? "text-orange-safety bg-orange-safety/8"
+                      : "text-gray-text hover:text-white hover:bg-white/[0.04]"
+                  }`}
+                  onClick={() => setOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </div>
         </nav>
       )}

@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Camera,
-  X,
   CheckCircle2,
   Wind,
   Gauge,
@@ -154,7 +152,6 @@ interface FormState {
   electrical: string;
   brand: string;
   extras: string[];
-  photos: string[];
   budget: string;
   timeline: string;
   propertyStatus: string;
@@ -178,7 +175,6 @@ const INITIAL: FormState = {
   electrical: "",
   brand: "",
   extras: [],
-  photos: [],
   budget: "",
   timeline: "",
   propertyStatus: "",
@@ -251,17 +247,16 @@ export default function HVACEstimator() {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [result, setResult] = useState<EstimateResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const isRepairs = form.workType === "Repairs / troubleshooting";
   const isDucted = form.workType === "Ducted system installation";
 
   // Steps: 0=FAQ, 1=Suburb, 2=WorkType, 3=SystemSize, 4=PropertyType,
-  //         5=Complexity, 6=Electrical, 7=Brand, 8=Extras, 9=Photos,
+  //         5=Complexity, 6=Electrical, 7=Brand, 8=Extras,
   //         10=Budget, 11=Timeline, 12=Readiness, 13=Contact, 14=Result
   // Repairs skip: 3 (size), 8 (extras)
   function getVisibleSteps(): number[] {
-    const all = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+    const all = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13];
     if (isRepairs) return all.filter((s) => s !== 3 && s !== 8);
     return all;
   }
@@ -291,32 +286,6 @@ export default function HVACEstimator() {
       extras: prev.extras.includes(extra)
         ? prev.extras.filter((e) => e !== extra)
         : [...prev.extras, extra],
-    }));
-  }
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    const remaining = 5 - form.photos.length;
-    const toProcess = files.slice(0, remaining);
-    const base64Promises = toProcess.map(
-      (file) =>
-        new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        })
-    );
-    const results = await Promise.all(base64Promises);
-    setForm((prev) => ({
-      ...prev,
-      photos: [...prev.photos, ...results].slice(0, 5),
-    }));
-  }
-
-  function removePhoto(index: number) {
-    setForm((prev) => ({
-      ...prev,
-      photos: prev.photos.filter((_, i) => i !== index),
     }));
   }
 
@@ -687,79 +656,6 @@ export default function HVACEstimator() {
               {form.extras.length} selected
             </p>
           )}
-          <div className="flex justify-end">
-            <button onClick={goNext} className={BTN_NEXT}>
-              Continue <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 9: Photos */}
-      {step === 9 && (
-        <div className="space-y-6">
-          <button onClick={goPrev} className={BTN_BACK}>
-            <ArrowLeft size={16} /> Back
-          </button>
-          <StepHeading
-            title="Optional: Upload photos to refine accuracy"
-            subtitle="Photos help refine accuracy for access, pipe runs, and electrical setup. You can skip this step."
-          />
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          {form.photos.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
-              {form.photos.map((src, i) => (
-                <div key={i} className="relative group aspect-square">
-                  <img
-                    src={src}
-                    alt={`Upload ${i + 1}`}
-                    className="h-full w-full rounded-lg object-cover border border-gray-light"
-                  />
-                  <button
-                    onClick={() => removePhoto(i)}
-                    className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {form.photos.length < 5 && (
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 rounded-lg border border-dashed border-gray-light bg-gray-mid px-5 py-4 text-sm text-gray-text hover:border-orange-safety/50 hover:text-white transition-colors cursor-pointer w-full justify-center"
-            >
-              <Camera size={18} />
-              Upload Photos ({form.photos.length}/5)
-            </button>
-          )}
-          <div className="rounded-lg bg-gray-mid/50 p-4 space-y-2">
-            <p className="text-sm font-medium text-gray-text">
-              Helpful photos include:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-text">
-              {[
-                { icon: Home, text: "Outdoor unit location" },
-                { icon: Zap, text: "Switchboard / electrical panel" },
-                { icon: Wrench, text: "Ceiling or roof cavity access" },
-                { icon: Camera, text: "Area for indoor unit" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-2">
-                  <Icon size={14} className="shrink-0" />
-                  <span>{text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
           <div className="flex justify-end">
             <button onClick={goNext} className={BTN_NEXT}>
               Continue <ArrowRight size={16} />
