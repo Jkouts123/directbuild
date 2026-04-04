@@ -30,31 +30,47 @@ export default function PhoneVerify({ phone, onVerified, onCancel }: PhoneVerify
     return "+61" + digits;
   }
 
-  const sendOTP = useCallback(async () => {
-    if (!recaptchaRef.current) return;
-    setSending(true);
-    setError("");
+  // Initialize the RecaptchaVerifier once on mount
+  useEffect(() => {
+    if (!recaptchaRef.current || verifierRef.current) return;
 
-    try {
-      // Clean up any existing verifier
+    verifierRef.current = new RecaptchaVerifier(auth, recaptchaRef.current, {
+      size: "invisible",
+    });
+
+    // Render the widget into the DOM so it can produce tokens
+    verifierRef.current.render().catch((err) => {
+      console.error("reCAPTCHA render failed:", err);
+    });
+
+    return () => {
       if (verifierRef.current) {
         verifierRef.current.clear();
         verifierRef.current = null;
       }
+    };
+  }, []);
 
-      const verifier = new RecaptchaVerifier(auth, recaptchaRef.current, {
-        size: "invisible",
-      });
-      verifierRef.current = verifier;
+  const sendOTP = useCallback(async () => {
+    if (!verifierRef.current) {
+      setError("reCAPTCHA not ready. Please reload and try again.");
+      return;
+    }
+    setSending(true);
+    setError("");
 
-      const result = await signInWithPhoneNumber(auth, formatPhone(phone), verifier);
+    try {
+      const result = await signInWithPhoneNumber(auth, formatPhone(phone), verifierRef.current);
       setConfirmation(result);
     } catch (err) {
+      console.error("Firebase OTP error:", err);
       const message = err instanceof Error ? err.message : "Failed to send SMS";
       if (message.includes("too-many-requests")) {
         setError("Too many attempts. Please wait a few minutes and try again.");
       } else if (message.includes("invalid-phone-number")) {
         setError("Invalid phone number. Please check and try again.");
+      } else if (message.includes("app-not-authorized") || message.includes("recaptcha")) {
+        setError("Verification service error. Please reload the page.");
       } else {
         setError("Could not send verification code. Please try again.");
       }
@@ -63,13 +79,14 @@ export default function PhoneVerify({ phone, onVerified, onCancel }: PhoneVerify
     }
   }, [phone]);
 
+  // Send OTP automatically on mount (after reCAPTCHA renders)
+  const hasSentRef = useRef(false);
   useEffect(() => {
-    sendOTP();
-    return () => {
-      if (verifierRef.current) {
-        verifierRef.current.clear();
-      }
-    };
+    if (hasSentRef.current) return;
+    hasSentRef.current = true;
+    // Small delay to let reCAPTCHA render() complete
+    const timer = setTimeout(() => sendOTP(), 600);
+    return () => clearTimeout(timer);
   }, [sendOTP]);
 
   function handleInput(index: number, value: string) {
