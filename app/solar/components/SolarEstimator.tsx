@@ -253,6 +253,7 @@ export default function SolarEstimator() {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [result, setResult] = useState<EstimateResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Steps: 0=FAQ, 1=Suburb, 2=SystemSize, 3=PanelTier, 4=Inverter,
@@ -350,6 +351,7 @@ export default function SolarEstimator() {
       setStep(16);
     } catch (err) {
       console.error("Estimate failed:", err);
+      setSubmitError("Something went wrong generating your estimate. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -1058,6 +1060,7 @@ export default function SolarEstimator() {
           onBack={goPrev}
           loading={loading}
           serviceName="Solar"
+          error={submitError}
         />
       )}
     </div>

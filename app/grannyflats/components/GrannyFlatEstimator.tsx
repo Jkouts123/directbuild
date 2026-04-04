@@ -232,6 +232,7 @@ export default function GrannyFlatEstimator() {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [result, setResult] = useState<EstimateResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const totalSteps = STEP_LIST.length;
@@ -314,6 +315,7 @@ export default function GrannyFlatEstimator() {
       setStepIdx(totalSteps); // result screen
     } catch (err) {
       console.error("Estimate failed:", err);
+      setSubmitError("Something went wrong generating your estimate. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -686,6 +688,7 @@ export default function GrannyFlatEstimator() {
           onBack={goPrev}
           loading={loading}
           serviceName="Granny Flat"
+          error={submitError}
         />
       )}
     </div>

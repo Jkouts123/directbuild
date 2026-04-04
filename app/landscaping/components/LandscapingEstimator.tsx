@@ -117,6 +117,7 @@ export default function LandscapingEstimator() {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [result, setResult] = useState<EstimateResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── helpers ──
@@ -216,6 +217,7 @@ export default function LandscapingEstimator() {
       setStep(8);
     } catch (err) {
       console.error("Estimate failed:", err);
+      setSubmitError("Something went wrong generating your estimate. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -255,6 +257,7 @@ export default function LandscapingEstimator() {
         onBack={() => setStep(6)}
         loading={loading}
         serviceName="Landscaping"
+        error={submitError}
       />
     );
   }

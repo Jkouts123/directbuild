@@ -247,6 +247,7 @@ export default function HVACEstimator() {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [result, setResult] = useState<EstimateResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const isRepairs = form.workType === "Repairs / troubleshooting";
   const isDucted = form.workType === "Ducted system installation";
@@ -323,6 +324,7 @@ export default function HVACEstimator() {
       setStep(14);
     } catch (err) {
       console.error("Estimate failed:", err);
+      setSubmitError("Something went wrong generating your estimate. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -893,6 +895,7 @@ export default function HVACEstimator() {
           onBack={goPrev}
           loading={loading}
           serviceName="HVAC"
+          error={submitError}
         />
       )}
     </div>

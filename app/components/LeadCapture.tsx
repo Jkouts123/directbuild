@@ -15,6 +15,7 @@ interface LeadCaptureProps {
   onBack: () => void;
   loading: boolean;
   serviceName: string;
+  error?: string;
 }
 
 const INPUT =
@@ -31,6 +32,7 @@ export default function LeadCapture({
   onBack,
   loading,
   serviceName,
+  error,
 }: LeadCaptureProps) {
   const [showOTP, setShowOTP] = useState(false);
   const isValid = firstName.trim().length > 0 && phone.trim().length >= 8;
@@ -40,8 +42,11 @@ export default function LeadCapture({
   }
 
   function handleVerified() {
-    setShowOTP(false);
+    // Call onSubmit FIRST (triggers loading state in parent),
+    // then hide OTP overlay. This prevents a flash of the form
+    // between verification and the loading screen.
     onSubmit();
+    setShowOTP(false);
   }
 
   // OTP overlay
@@ -137,6 +142,12 @@ export default function LeadCapture({
               />
             </div>
           </div>
+
+          {error && (
+            <p className="text-sm text-red-400 text-center bg-red-400/10 rounded-lg px-4 py-3">
+              {error}
+            </p>
+          )}
 
           <button
             onClick={handleVerifyClick}
