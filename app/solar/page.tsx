@@ -5,7 +5,6 @@ import { SolarPanel } from "@phosphor-icons/react";
 import SolarEstimator from "./components/SolarEstimator";
 import FacebookPixel from "../components/FacebookPixel";
 import TrustBar from "../components/TrustBar";
-import SampleQuotePreview from "../components/SampleQuotePreview";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
@@ -69,7 +68,6 @@ export default function SolarPage() {
           className="space-y-8"
         >
           <SolarEstimator />
-          <SampleQuotePreview />
         </motion.div>
       </div>
     </div>

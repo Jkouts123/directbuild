@@ -5,7 +5,6 @@ import { Wind } from "@phosphor-icons/react";
 import HVACEstimator from "./components/HVACEstimator";
 import FacebookPixel from "../components/FacebookPixel";
 import TrustBar from "../components/TrustBar";
-import SampleQuotePreview from "../components/SampleQuotePreview";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
@@ -69,7 +68,6 @@ export default function HvacPage() {
           className="space-y-8"
         >
           <HVACEstimator />
-          <SampleQuotePreview />
         </motion.div>
       </div>
     </div>

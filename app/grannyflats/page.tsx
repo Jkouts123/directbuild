@@ -5,7 +5,6 @@ import { House } from "@phosphor-icons/react";
 import GrannyFlatEstimator from "./components/GrannyFlatEstimator";
 import FacebookPixel from "../components/FacebookPixel";
 import TrustBar from "../components/TrustBar";
-import SampleQuotePreview from "../components/SampleQuotePreview";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
@@ -69,7 +68,6 @@ export default function GrannyFlatsPage() {
           className="space-y-8"
         >
           <GrannyFlatEstimator />
-          <SampleQuotePreview />
         </motion.div>
       </div>
     </div>

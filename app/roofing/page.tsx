@@ -5,7 +5,6 @@ import { HardHat } from "@phosphor-icons/react";
 import RoofingEstimator from "./components/RoofingEstimator";
 import FacebookPixel from "../components/FacebookPixel";
 import TrustBar from "../components/TrustBar";
-import SampleQuotePreview from "../components/SampleQuotePreview";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
@@ -69,7 +68,6 @@ export default function RoofingPage() {
           className="space-y-8"
         >
           <RoofingEstimator />
-          <SampleQuotePreview />
         </motion.div>
       </div>
     </div>
