@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { Wind } from "@phosphor-icons/react";
 import HVACEstimator from "./components/HVACEstimator";
 import FacebookPixel from "../components/FacebookPixel";
+import TrustBar from "../components/TrustBar";
+import SampleQuotePreview from "../components/SampleQuotePreview";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
@@ -39,6 +41,22 @@ export default function HvacPage() {
             >
               Get an instant ballpark estimate for your air conditioning project. Answer a few questions and we will calculate typical costs based on 2026 Australian market rates.
             </motion.p>
+            <motion.p
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...spring, delay: 0.25 }}
+              className="text-white/50 text-sm mt-4 max-w-[55ch]"
+            >
+              Join over 2,000 Australian homeowners who&apos;ve used Direct Build to get a fair price before calling a contractor.
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...spring, delay: 0.35 }}
+              className="mt-6"
+            >
+              <TrustBar />
+            </motion.div>
           </div>
         </div>
       </section>
@@ -48,8 +66,10 @@ export default function HvacPage() {
           initial={{ opacity: 0, y: 32 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...spring, delay: 0.3 }}
+          className="space-y-8"
         >
           <HVACEstimator />
+          <SampleQuotePreview />
         </motion.div>
       </div>
     </div>
