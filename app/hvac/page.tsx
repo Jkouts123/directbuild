@@ -3,12 +3,14 @@
 import { motion } from "framer-motion";
 import { Wind } from "@phosphor-icons/react";
 import HVACEstimator from "./components/HVACEstimator";
+import FacebookPixel from "../components/FacebookPixel";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
 export default function HvacPage() {
   return (
     <div>
+      <FacebookPixel pixelId="1435952064529424" />
       <section
         className="relative min-h-[420px] sm:min-h-[480px] flex items-center bg-cover bg-center bg-fixed"
         style={{ backgroundImage: "url('/hero-home.jpg')" }}

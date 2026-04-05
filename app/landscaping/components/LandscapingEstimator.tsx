@@ -13,6 +13,7 @@ import SuburbSearch, { type SuburbEntry } from "./SuburbSearch";
 import { generateEstimate, type EstimateResult } from "../../actions/generate-estimate";
 import LoadingPulse from "../../components/LoadingPulse";
 import LeadCapture from "../../components/LeadCapture";
+import { trackFacebookLead } from "../../components/FacebookPixel";
 import {
   BTN_NEXT,
   BTN_BACK,
@@ -214,6 +215,7 @@ export default function LandscapingEstimator() {
         },
       });
       setResult(res);
+      trackFacebookLead();
       setStep(8);
     } catch (err) {
       console.error("Estimate failed:", err);

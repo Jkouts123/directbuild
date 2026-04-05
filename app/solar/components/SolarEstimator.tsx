@@ -22,6 +22,7 @@ import SuburbSearch, { type SuburbEntry } from "../../landscaping/components/Sub
 import { generateEstimate, type EstimateResult } from "../../actions/generate-estimate";
 import LoadingPulse from "../../components/LoadingPulse";
 import LeadCapture from "../../components/LeadCapture";
+import { trackFacebookLead } from "../../components/FacebookPixel";
 import { BTN_NEXT, BTN_BACK, INPUT, TILE, TILE_SELECTED } from "../../components/brand-styles";
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -348,6 +349,7 @@ export default function SolarEstimator() {
         },
       });
       setResult(res);
+      trackFacebookLead();
       setStep(16);
     } catch (err) {
       console.error("Estimate failed:", err);

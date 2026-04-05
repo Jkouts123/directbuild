@@ -13,6 +13,7 @@ import SuburbSearch, { type SuburbEntry } from "../../landscaping/components/Sub
 import { generateEstimate, type EstimateResult } from "../../actions/generate-estimate";
 import LoadingPulse from "../../components/LoadingPulse";
 import LeadCapture from "../../components/LeadCapture";
+import { trackFacebookLead } from "../../components/FacebookPixel";
 import { BTN_NEXT, BTN_BACK, INPUT, TILE, TILE_SELECTED, CHECKBOX_LABEL, UPLOAD_BTN_LARGE } from "../../components/brand-styles";
 
 // ── Options (from reference) ──────────────────────────────────────────
@@ -388,6 +389,7 @@ export default function RoofingEstimator() {
         },
       });
       setResult(res);
+      trackFacebookLead();
       setStepIdx(steps.length); // result screen
     } catch (err) {
       console.error("Estimate failed:", err);

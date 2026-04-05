@@ -3,12 +3,14 @@
 import { motion } from "framer-motion";
 import { House } from "@phosphor-icons/react";
 import GrannyFlatEstimator from "./components/GrannyFlatEstimator";
+import FacebookPixel from "../components/FacebookPixel";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
 export default function GrannyFlatsPage() {
   return (
     <div>
+      <FacebookPixel pixelId="1877472012898326" />
       <section
         className="relative min-h-[420px] sm:min-h-[480px] flex items-center bg-cover bg-center bg-fixed"
         style={{ backgroundImage: "url('/hero-home.jpg')" }}

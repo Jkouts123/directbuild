@@ -3,12 +3,14 @@
 import { motion } from "framer-motion";
 import { HardHat } from "@phosphor-icons/react";
 import RoofingEstimator from "./components/RoofingEstimator";
+import FacebookPixel from "../components/FacebookPixel";
 
 const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
 
 export default function RoofingPage() {
   return (
     <div>
+      <FacebookPixel pixelId="845633454875269" />
       <section
         className="relative min-h-[420px] sm:min-h-[480px] flex items-center bg-cover bg-center bg-fixed"
         style={{ backgroundImage: "url('/hero-home.jpg')" }}
