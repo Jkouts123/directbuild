@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { getFirebaseAuth } from "@/lib/firebase";
 import { ShieldCheck, X, Loader2 } from "lucide-react";
 
 interface PhoneVerifyProps {
@@ -34,7 +34,8 @@ export default function PhoneVerify({ phone, onVerified, onCancel }: PhoneVerify
   useEffect(() => {
     if (!recaptchaRef.current || verifierRef.current) return;
 
-    verifierRef.current = new RecaptchaVerifier(auth, recaptchaRef.current, {
+    const firebaseAuth = getFirebaseAuth();
+    verifierRef.current = new RecaptchaVerifier(firebaseAuth, recaptchaRef.current, {
       size: "invisible",
     });
 
@@ -60,7 +61,8 @@ export default function PhoneVerify({ phone, onVerified, onCancel }: PhoneVerify
     setError("");
 
     try {
-      const result = await signInWithPhoneNumber(auth, formatPhone(phone), verifierRef.current);
+      const firebaseAuth = getFirebaseAuth();
+      const result = await signInWithPhoneNumber(firebaseAuth, formatPhone(phone), verifierRef.current);
       setConfirmation(result);
     } catch (err) {
       console.error("Firebase OTP error:", err);

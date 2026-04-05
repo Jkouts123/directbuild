@@ -176,107 +176,113 @@ Calculate a realistic estimate and return ONLY the JSON object.`;
 export async function generateEstimate(
   request: EstimateRequest
 ): Promise<EstimateResult> {
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GOOGLE_GEMINI_API_KEY is not configured in .env.local");
-  }
+  try {
+    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GOOGLE_GEMINI_API_KEY is not configured");
+    }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = new GoogleGenerativeAI(apiKey);
 
-  // Services that support image analysis
-  const supportsImages = ["landscaping", "roofing", "granny-flats"];
-  const hasImages =
-    supportsImages.includes(request.serviceType) &&
-    request.images &&
-    request.images.length > 0;
+    // Services that support image analysis
+    const supportsImages = ["landscaping", "roofing", "granny-flats"];
+    const hasImages =
+      supportsImages.includes(request.serviceType) &&
+      request.images &&
+      request.images.length > 0;
 
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction: buildSystemPrompt(request.serviceType),
-  });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: buildSystemPrompt(request.serviceType),
+    });
 
-  const userPrompt = buildUserPrompt(request.serviceType, request.formData);
+    const userPrompt = buildUserPrompt(request.serviceType, request.formData);
 
-  // Build content parts
-  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
-    { text: userPrompt },
-  ];
+    // Build content parts
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      { text: userPrompt },
+    ];
 
-  // Add images for services that support them
-  if (hasImages && request.images) {
-    for (const dataUri of request.images) {
-      // Extract mime type and base64 data from data URI
-      const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        parts.push({
-          inlineData: {
-            mimeType: match[1],
-            data: match[2],
-          },
-        });
+    // Add images for services that support them
+    if (hasImages && request.images) {
+      for (const dataUri of request.images) {
+        const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          parts.push({
+            inlineData: {
+              mimeType: match[1],
+              data: match[2],
+            },
+          });
+        }
       }
     }
+
+    const result = await model.generateContent(parts);
+    const responseText = result.response.text();
+
+    // Parse JSON from response (strip any markdown fencing)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Failed to parse AI response");
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      centerPrice: number;
+      lineItems: EstimateLineItem[];
+      summary: string;
+      disclaimer: string;
+      stcRebate?: number;
+      estimatedSavings?: number;
+    };
+
+    // Apply Jason Gap Rules
+    const gap = calculateGap(parsed.centerPrice);
+    const minPrice = Math.round(parsed.centerPrice - gap / 2);
+    const maxPrice = Math.round(parsed.centerPrice + gap / 2);
+
+    const estimate: EstimateResult = {
+      centerPrice: Math.round(parsed.centerPrice),
+      minPrice: Math.max(0, minPrice),
+      maxPrice,
+      lineItems: parsed.lineItems,
+      summary: parsed.summary,
+      disclaimer:
+        parsed.disclaimer ||
+        "This is an AI-generated indicative estimate based on 2026 market rates. Final pricing is confirmed after an on-site assessment by your assigned specialist.",
+      stcRebate: parsed.stcRebate ? Math.round(parsed.stcRebate) : undefined,
+      estimatedSavings: parsed.estimatedSavings
+        ? Math.round(parsed.estimatedSavings)
+        : undefined,
+    };
+
+    // Save to Supabase + notify n8n (non-blocking, parallel)
+    const suburb = String(request.formData.suburb || request.formData.location_suburb || "");
+
+    const saveToSupabase = supabase.from("leads").insert({
+      name: request.contact.firstName,
+      phone: request.contact.phone,
+      email: request.contact.email || null,
+      suburb,
+      service_type: request.serviceType,
+      user_input: request.formData,
+      ai_quote: estimate,
+      verified_phone: true,
+      created_at: new Date().toISOString(),
+    }).then(() => {}, (err) => console.error("Supabase insert failed:", err));
+
+    const notifyN8n = triggerN8nWebhook(request, estimate, suburb)
+      .then(() => {}, (err) => console.error("n8n webhook failed:", err));
+
+    await Promise.allSettled([saveToSupabase, notifyN8n]);
+
+    return estimate;
+  } catch (err) {
+    console.error("generateEstimate error:", err);
+    throw new Error(
+      err instanceof Error ? err.message : "Failed to generate estimate. Please try again."
+    );
   }
-
-  const result = await model.generateContent(parts);
-  const responseText = result.response.text();
-
-  // Parse JSON from response (strip any markdown fencing)
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Failed to parse Gemini response as JSON");
-  }
-
-  const parsed = JSON.parse(jsonMatch[0]) as {
-    centerPrice: number;
-    lineItems: EstimateLineItem[];
-    summary: string;
-    disclaimer: string;
-    stcRebate?: number;
-    estimatedSavings?: number;
-  };
-
-  // Apply Jason Gap Rules
-  const gap = calculateGap(parsed.centerPrice);
-  const minPrice = Math.round(parsed.centerPrice - gap / 2);
-  const maxPrice = Math.round(parsed.centerPrice + gap / 2);
-
-  const estimate: EstimateResult = {
-    centerPrice: Math.round(parsed.centerPrice),
-    minPrice: Math.max(0, minPrice),
-    maxPrice,
-    lineItems: parsed.lineItems,
-    summary: parsed.summary,
-    disclaimer:
-      parsed.disclaimer ||
-      "This is an AI-generated indicative estimate based on 2026 market rates. Final pricing is confirmed after an on-site assessment by your assigned specialist.",
-    stcRebate: parsed.stcRebate ? Math.round(parsed.stcRebate) : undefined,
-    estimatedSavings: parsed.estimatedSavings
-      ? Math.round(parsed.estimatedSavings)
-      : undefined,
-  };
-
-  // Save to Supabase + notify n8n (non-blocking, parallel)
-  const suburb = String(request.formData.suburb || request.formData.location_suburb || "");
-
-  const saveToSupabase = supabase.from("leads").insert({
-    name: request.contact.firstName,
-    phone: request.contact.phone,
-    email: request.contact.email || null,
-    suburb,
-    service_type: request.serviceType,
-    user_input: request.formData,
-    ai_quote: estimate,
-    verified_phone: true,
-    created_at: new Date().toISOString(),
-  }).then(() => {}, (err) => console.error("Supabase insert failed:", err));
-
-  const notifyN8n = triggerN8nWebhook(request, estimate, suburb)
-    .then(() => {}, (err) => console.error("n8n webhook failed:", err));
-
-  await Promise.allSettled([saveToSupabase, notifyN8n]);
-
-  return estimate;
 }
 
 // ── n8n Webhook ───────────────────────────────────────────────────────
