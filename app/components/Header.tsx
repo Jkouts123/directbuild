@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "/grannyflats", label: "Granny flats" },
   { href: "/landscaping", label: "Landscaping" },
   { href: "/roofing", label: "Roofing" },
+  { href: "/joinus", label: "Join us" },
 ];
 
 function BrandLogo() {
