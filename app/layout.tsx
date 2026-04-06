@@ -21,6 +21,12 @@ export const metadata: Metadata = {
   title: "directbuild | Vetted tradies, direct to your door",
   description:
     "Australia's private network of rigorously vetted tradies. Solar, HVAC, granny flats, landscaping and roofing — no marketplaces, no bidding wars.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

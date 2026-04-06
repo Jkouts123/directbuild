@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0d1420"/>
+  <!-- House outline -->
+  <path d="M256 100 L420 230 L420 410 Q420 420 410 420 L102 420 Q92 420 92 410 L92 230 Z" fill="none" stroke="#FF8800" stroke-width="32" stroke-linejoin="round"/>
+  <!-- Door -->
+  <rect x="206" y="290" width="100" height="130" rx="8" fill="none" stroke="#FF8800" stroke-width="24"/>
+  <!-- Roof peak accent -->
+  <path d="M256 100 L420 230" fill="none" stroke="#FF8800" stroke-width="32" stroke-linecap="round"/>
+  <path d="M256 100 L92 230" fill="none" stroke="#FF8800" stroke-width="32" stroke-linecap="round"/>
+</svg>
