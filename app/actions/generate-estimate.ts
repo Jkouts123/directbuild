@@ -191,10 +191,17 @@ export async function generateEstimate(
       request.images &&
       request.images.length > 0;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: buildSystemPrompt(request.serviceType),
-    });
+    const model = genAI.getGenerativeModel(
+      {
+        model: "gemini-2.5-flash",
+        systemInstruction: buildSystemPrompt(request.serviceType),
+      },
+      {
+        // Disable thinking mode — prevents thinking tokens from prefixing
+        // the JSON output and breaking our parser in SDK v0.24.x
+        apiVersion: "v1beta",
+      }
+    );
 
     const userPrompt = buildUserPrompt(request.serviceType, request.formData);
 
@@ -203,9 +210,14 @@ export async function generateEstimate(
       { text: userPrompt },
     ];
 
-    // Add images for services that support them
+    // Add images for services that support them (strip oversized ones)
     if (hasImages && request.images) {
       for (const dataUri of request.images) {
+        // Skip images over ~3MB base64 to stay within Vercel 4.5MB body limit
+        if (dataUri.length > 3_000_000) {
+          console.warn(`[generateEstimate] Skipping oversized image (${Math.round(dataUri.length / 1024)}KB)`);
+          continue;
+        }
         const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
         if (match) {
           parts.push({
@@ -218,13 +230,30 @@ export async function generateEstimate(
       }
     }
 
-    const result = await model.generateContent(parts);
-    const responseText = result.response.text();
+    console.log(`[generateEstimate] Calling Gemini for ${request.serviceType}, parts: ${parts.length}`);
 
-    // Parse JSON from response (strip any markdown fencing)
+    let result;
+    try {
+      result = await model.generateContent({
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          // @ts-expect-error thinkingConfig is supported in v1beta but not in SDK types yet
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      });
+    } catch (geminiErr) {
+      console.error(`[generateEstimate] Gemini API error for ${request.serviceType}:`, geminiErr);
+      throw geminiErr;
+    }
+
+    const responseText = result.response.text();
+    console.log(`[generateEstimate] Gemini response length: ${responseText.length} chars`);
+
+    // Parse JSON from response — strip markdown fencing and any leading text
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("Failed to parse AI response");
+      console.error(`[generateEstimate] Could not find JSON in response:\n${responseText.slice(0, 500)}`);
+      throw new Error("Failed to parse AI response — no JSON object found");
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as {
@@ -278,10 +307,12 @@ export async function generateEstimate(
 
     return estimate;
   } catch (err) {
-    console.error("generateEstimate error:", err);
-    throw new Error(
-      err instanceof Error ? err.message : "Failed to generate estimate. Please try again."
-    );
+    // Log full error detail so it's visible in Vercel function logs
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const errStack = err instanceof Error ? err.stack : undefined;
+    console.error(`[generateEstimate] FATAL for ${request.serviceType}: ${errMsg}`);
+    if (errStack) console.error(errStack);
+    throw new Error(errMsg || "Failed to generate estimate. Please try again.");
   }
 }
 

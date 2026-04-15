@@ -688,7 +688,7 @@ export default function LandscapingEstimator() {
               Site Photos
             </h3>
             <p className="text-sm text-gray-text">
-              Upload at least one photo so we can verify slope, access, and existing structures. (Up to 3)
+              Optional: upload photos of your site so we can factor in slope, access, and existing structures. (Up to 3)
             </p>
           </div>
 
@@ -741,10 +741,9 @@ export default function LandscapingEstimator() {
             </button>
             <button
               onClick={() => setStep(6)}
-              disabled={form.photos.length === 0}
-              className={`${BTN_NEXT} ${form.photos.length === 0 ? "opacity-40 pointer-events-none" : ""}`}
+              className={BTN_NEXT}
             >
-              Continue
+              {form.photos.length === 0 ? "Skip for Now" : "Continue"}
               <ArrowRight size={16} />
             </button>
           </div>
