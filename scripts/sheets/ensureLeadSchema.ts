@@ -1,53 +1,25 @@
 /**
  * ensureLeadSchema.ts
  *
- * Reads the current header row on the Leads tab.
- * Appends any columns from the target schema that are missing.
- * Never reorders or removes existing columns.
- * Safe to run repeatedly.
+ * Loops through every lead tab (Landscaping, Roofing, Solar, HVAC, Grannyflat)
+ * and ensures all LEAD_COLUMNS headers exist on each one.
+ * Missing headers are appended after the last existing column.
+ * Existing headers are never reordered or removed.
+ * Safe to run repeatedly — idempotent.
  */
 
 import { google } from "googleapis";
 import { auth } from "./auth";
 import { SPREADSHEET_ID, TABS, LEAD_COLUMNS } from "./config";
 
-async function run() {
-  const sheets = google.sheets({ version: "v4", auth });
-
-  // Read row 1 (headers)
-  const headerRange = `${TABS.LEADS}!1:1`;
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: headerRange,
-  });
-
-  const existingHeaders: string[] = res.data.values?.[0] ?? [];
-  console.log(`[Leads] Existing headers (${existingHeaders.length}):`, existingHeaders);
-
-  const missing = LEAD_COLUMNS.filter((col) => !existingHeaders.includes(col));
-
-  if (missing.length === 0) {
-    console.log("[Leads] Schema is already up to date. Nothing to add.");
-    return;
-  }
-
-  console.log(`[Leads] Adding ${missing.length} missing column(s):`, missing);
-
-  // Append missing headers after the last existing column
-  const startColIndex = existingHeaders.length; // 0-based
-  const startColLetter = colIndexToLetter(startColIndex);
-  const endColLetter = colIndexToLetter(startColIndex + missing.length - 1);
-  const writeRange = `${TABS.LEADS}!${startColLetter}1:${endColLetter}1`;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: writeRange,
-    valueInputOption: "RAW",
-    requestBody: { values: [missing] },
-  });
-
-  console.log(`[Leads] Done — headers written to ${writeRange}`);
-}
+// All tabs that hold homeowner leads — each gets the same LEAD_COLUMNS schema
+const LEAD_TABS = [
+  TABS.LANDSCAPING,
+  TABS.ROOFING,
+  TABS.SOLAR,
+  TABS.HVAC,
+  TABS.GRANNYFLATS,
+] as const;
 
 function colIndexToLetter(index: number): string {
   let letter = "";
@@ -59,7 +31,56 @@ function colIndexToLetter(index: number): string {
   return letter;
 }
 
+async function ensureTabSchema(
+  sheets: ReturnType<typeof google.sheets>,
+  tabName: string
+) {
+  const tag = `[${tabName}]`;
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${tabName}!1:1`,
+  });
+
+  const existingHeaders: string[] = res.data.values?.[0] ?? [];
+  console.log(`${tag} Existing headers (${existingHeaders.length}):`, existingHeaders);
+
+  const missing = LEAD_COLUMNS.filter((col) => !existingHeaders.includes(col));
+
+  if (missing.length === 0) {
+    console.log(`${tag} Schema is already up to date. Nothing to add.`);
+    return;
+  }
+
+  console.log(`${tag} Adding ${missing.length} missing column(s):`, missing);
+
+  const startColIndex = existingHeaders.length;
+  const startColLetter = colIndexToLetter(startColIndex);
+  const endColLetter = colIndexToLetter(startColIndex + missing.length - 1);
+  const writeRange = `${tabName}!${startColLetter}1:${endColLetter}1`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: writeRange,
+    valueInputOption: "RAW",
+    requestBody: { values: [missing] },
+  });
+
+  console.log(`${tag} Done — headers written to ${writeRange}`);
+}
+
+async function run() {
+  const sheets = google.sheets({ version: "v4", auth });
+
+  for (const tabName of LEAD_TABS) {
+    await ensureTabSchema(sheets, tabName);
+    console.log("");
+  }
+
+  console.log("ensureLeadSchema complete.");
+}
+
 run().catch((err) => {
-  console.error("[Leads] Error:", err.message ?? err);
+  console.error("[ensureLeadSchema] Error:", err.message ?? err);
   process.exit(1);
 });

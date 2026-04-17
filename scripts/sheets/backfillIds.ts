@@ -1,7 +1,8 @@
 /**
  * backfillIds.ts
  *
- * Backfills lead_id on the Leads tab and tradie_id on the Tradies tab
+ * Backfills lead_id on all lead tabs (Landscaping, Roofing, Solar, HVAC, Grannyflat)
+ * and tradie_id on the TradieSignups tab.
  * for any row that has data but an empty ID field.
  *
  * Rules:
@@ -108,10 +109,22 @@ function colIndexToLetter(index: number): string {
   return letter;
 }
 
+// All tabs that hold homeowner leads — each gets lead_id backfilled
+const LEAD_TABS = [
+  TABS.LANDSCAPING,
+  TABS.ROOFING,
+  TABS.SOLAR,
+  TABS.HVAC,
+  TABS.GRANNYFLATS,
+] as const;
+
 async function run() {
   const sheets = google.sheets({ version: "v4", auth });
 
-  await backfillTab(sheets, TABS.LEADS, "lead_id", generateLeadId, "name");
+  for (const tabName of LEAD_TABS) {
+    await backfillTab(sheets, tabName, "lead_id", generateLeadId, "name");
+  }
+
   await backfillTab(sheets, TABS.TRADIES, "tradie_id", generateTradieId, "full_name");
 
   console.log("\n[backfillIds] Complete.");
