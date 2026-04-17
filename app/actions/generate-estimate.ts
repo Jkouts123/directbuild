@@ -243,12 +243,29 @@ export async function generateEstimate(
         },
       });
     } catch (geminiErr) {
-      console.error(`[generateEstimate] Gemini API error for ${request.serviceType}:`, geminiErr);
+      console.error(
+        `[generateEstimate] Gemini API error for ${request.serviceType}:`,
+        JSON.stringify(geminiErr, Object.getOwnPropertyNames(geminiErr as object))
+      );
       throw geminiErr;
     }
 
-    const responseText = result.response.text();
+    let responseText: string;
+    try {
+      responseText = result.response.text();
+    } catch (textErr) {
+      console.error(
+        "[generateEstimate] result.response.text() threw:",
+        JSON.stringify(textErr, Object.getOwnPropertyNames(textErr as object))
+      );
+      console.error(
+        "[generateEstimate] Raw candidates:",
+        JSON.stringify(result.response.candidates?.slice(0, 1))
+      );
+      throw textErr;
+    }
     console.log(`[generateEstimate] Gemini response length: ${responseText.length} chars`);
+    console.log(`[generateEstimate] Response preview: ${responseText.slice(0, 300)}`);
 
     // Parse JSON from response — strip markdown fencing and any leading text
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -257,7 +274,7 @@ export async function generateEstimate(
       throw new Error("Failed to parse AI response — no JSON object found");
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as {
+    let parsed: {
       centerPrice: number;
       lineItems: EstimateLineItem[];
       summary: string;
@@ -265,6 +282,15 @@ export async function generateEstimate(
       stcRebate?: number;
       estimatedSavings?: number;
     };
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseErr) {
+      console.error(
+        "[generateEstimate] JSON.parse failed. Snippet being parsed:",
+        jsonMatch[0].slice(0, 300)
+      );
+      throw parseErr;
+    }
 
     // Apply Jason Gap Rules
     const gap = calculateGap(parsed.centerPrice);
