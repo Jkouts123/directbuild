@@ -293,7 +293,7 @@ export async function generateEstimate(
     const suburb = String(request.formData.suburb || request.formData.location_suburb || "");
 
     const saveToSupabase = supabase.from("leads").insert({
-      lead_id: leadId,
+      // lead_id omitted until the column exists in the Supabase table
       name: request.contact.firstName,
       phone: request.contact.phone,
       email: request.contact.email || null,
@@ -303,7 +303,10 @@ export async function generateEstimate(
       ai_quote: estimate,
       verified_phone: true,
       created_at: new Date().toISOString(),
-    }).then(() => {}, (err) => console.error("Supabase insert failed:", err));
+    }).then(
+      ({ error }) => { if (error) console.error("[generateEstimate] Supabase insert failed:", error); },
+      (err) => console.error("[generateEstimate] Supabase insert rejected:", err)
+    );
 
     const notifyN8n = triggerN8nWebhook(request, estimate, suburb, leadId)
       .then(() => {}, (err) => console.error("n8n webhook failed:", err));
