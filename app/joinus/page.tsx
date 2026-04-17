@@ -22,6 +22,7 @@ import {
   Check,
 } from "@phosphor-icons/react";
 import PhoneVerify from "../components/PhoneVerify";
+import { generateTradieId } from "@/lib/utils/ids";
 
 // ── Constants ─────────────────────────────────────────────────────────
 const TOTAL_STEPS = 11; // steps 1-11 (0 = welcome, 12 = success)
@@ -317,7 +318,9 @@ export default function JoinUsPage() {
   async function handleSubmit() {
     setSubmitting(true);
     try {
+      const tradieId = generateTradieId();
       const payload = {
+        tradie_id: tradieId,
         full_name: form.fullName,
         abn: form.abn.replace(/\s/g, ""),
         business_name: form.businessName,
@@ -329,6 +332,8 @@ export default function JoinUsPage() {
         phone: form.phone,
         email: form.email,
         verified_phone: true,
+        status: "pending",
+        joined_at: new Date().toISOString(),
         timestamp: new Date().toISOString(),
       };
       const url =

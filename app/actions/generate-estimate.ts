@@ -2,6 +2,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "@/lib/supabase";
+import { generateLeadId } from "@/lib/utils/ids";
 
 // ── Types ─────────────────────────────────────────────────────────────
 export type ServiceType = "solar" | "hvac" | "landscaping" | "roofing" | "granny-flats";
@@ -285,10 +286,14 @@ export async function generateEstimate(
         : undefined,
     };
 
+    // Generate a stable ID once — shared by Supabase insert and n8n payload
+    const leadId = generateLeadId();
+
     // Save to Supabase + notify n8n (non-blocking, parallel)
     const suburb = String(request.formData.suburb || request.formData.location_suburb || "");
 
     const saveToSupabase = supabase.from("leads").insert({
+      lead_id: leadId,
       name: request.contact.firstName,
       phone: request.contact.phone,
       email: request.contact.email || null,
@@ -300,7 +305,7 @@ export async function generateEstimate(
       created_at: new Date().toISOString(),
     }).then(() => {}, (err) => console.error("Supabase insert failed:", err));
 
-    const notifyN8n = triggerN8nWebhook(request, estimate, suburb)
+    const notifyN8n = triggerN8nWebhook(request, estimate, suburb, leadId)
       .then(() => {}, (err) => console.error("n8n webhook failed:", err));
 
     await Promise.allSettled([saveToSupabase, notifyN8n]);
@@ -325,20 +330,32 @@ const N8N_ENDPOINTS: Record<ServiceType, string | undefined> = {
   "granny-flats": process.env.N8N_WEBHOOK_GRANNY_FLATS,
 };
 
+const SOURCE_PAGES: Record<ServiceType, string> = {
+  "solar": "/solar",
+  "hvac": "/hvac",
+  "landscaping": "/landscaping",
+  "roofing": "/roofing",
+  "granny-flats": "/grannyflats",
+};
+
 async function triggerN8nWebhook(
   request: EstimateRequest,
   estimate: EstimateResult,
   suburb: string,
+  leadId: string,
 ) {
   const url = N8N_ENDPOINTS[request.serviceType];
   if (!url) return;
 
   const payload = {
+    lead_id: leadId,
     name: request.contact.firstName,
     phone: request.contact.phone,
     email: request.contact.email || null,
     suburb,
     service_type: request.serviceType,
+    vertical: request.serviceType,
+    source_page: SOURCE_PAGES[request.serviceType],
     ai_quote_summary: estimate.summary,
     min_price: estimate.minPrice,
     max_price: estimate.maxPrice,

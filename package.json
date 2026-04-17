@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "sheets:ensure-leads": "ts-node --project scripts/tsconfig.json scripts/sheets/ensureLeadSchema.ts",
+    "sheets:ensure-tradies": "ts-node --project scripts/tsconfig.json scripts/sheets/ensureTradiesSchema.ts",
+    "sheets:ensure-assignments": "ts-node --project scripts/tsconfig.json scripts/sheets/ensureAssignmentsTab.ts",
+    "sheets:backfill-ids": "ts-node --project scripts/tsconfig.json scripts/sheets/backfillIds.ts"
   },
   "engines": {
     "node": "22.x"
@@ -16,6 +20,8 @@
     "@supabase/supabase-js": "^2.99.3",
     "firebase": "^12.11.0",
     "framer-motion": "^12.38.0",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^148.0.0",
     "lucide-react": "^0.577.0",
     "next": "16.2.1",
     "react": "19.2.4",
@@ -26,7 +32,9 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^16.4.7",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }
