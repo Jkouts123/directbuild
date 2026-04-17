@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -212,6 +212,36 @@ function SuburbSearchInput({
   );
 }
 
+// ── Facebook Pixel ────────────────────────────────────────────────────
+const JOINUS_PIXEL_ID = "744412482022839";
+
+function useJoinUsPixel() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Inject pixel script once
+    if (!(window as { fbq?: unknown }).fbq) {
+      const script = document.createElement("script");
+      script.innerHTML = `
+        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+        n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+        (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init','${JOINUS_PIXEL_ID}');
+        fbq('track','PageView');
+      `;
+      document.head.appendChild(script);
+    } else {
+      (window as { fbq?: (...args: unknown[]) => void }).fbq?.("init", JOINUS_PIXEL_ID);
+      (window as { fbq?: (...args: unknown[]) => void }).fbq?.("track", "PageView");
+    }
+  }, []);
+}
+
+function trackJoinUsLead() {
+  (window as { fbq?: (...args: unknown[]) => void }).fbq?.("track", "Lead");
+}
+
 // ── Main Component ────────────────────────────────────────────────────
 export default function JoinUsPage() {
   const [step, setStep] = useState(0); // 0=welcome, 1-11=form, 12=success
@@ -222,6 +252,7 @@ export default function JoinUsPage() {
   const [abnError, setAbnError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const abnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useJoinUsPixel();
 
   function goNext() {
     setDir(1);
@@ -308,6 +339,7 @@ export default function JoinUsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }).catch(() => {});
+      trackJoinUsLead();
     } catch {
       // non-blocking
     }
