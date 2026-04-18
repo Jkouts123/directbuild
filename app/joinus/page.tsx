@@ -251,6 +251,12 @@ export default function JoinUsPage() {
   const [abnLooking, setAbnLooking] = useState(false);
   const [abnValid, setAbnValid] = useState(false);
   const [abnError, setAbnError] = useState("");
+  const [abnMeta, setAbnMeta] = useState<{
+    entityType: string;
+    state: string;
+    postcode: string;
+    status: string;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const abnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useJoinUsPixel();
@@ -276,6 +282,7 @@ export default function JoinUsPage() {
     abnTimerRef.current = setTimeout(async () => {
       setAbnLooking(true);
       setAbnError("");
+      setAbnMeta(null);
       try {
         const res = await fetch(
           `https://abr.business.gov.au/json/AbnDetails.aspx?abn=${digits}&callback=c`
@@ -286,6 +293,12 @@ export default function JoinUsPage() {
           setForm((p) => ({ ...p, businessName: json.EntityName }));
           setAbnValid(true);
           setAbnError("");
+          setAbnMeta({
+            entityType: json.EntityTypeName || "",
+            state: json.AddressState || "",
+            postcode: json.AddressPostcode || "",
+            status: json.AbnStatus || "",
+          });
         } else {
           setAbnError(json.Message || "ABN not found");
         }
@@ -353,9 +366,11 @@ export default function JoinUsPage() {
     setStep(12);
   }
 
-  // After phone verify
+  // After phone verify — must set step explicitly, not goNext(),
+  // because step 99 + 1 = 100 which has no JSX match → blank page
   function handlePhoneVerified() {
-    goNext(); // go to email step
+    setDir(1);
+    setStep(10);
   }
 
   // Progress (steps 1-11)
@@ -467,10 +482,25 @@ export default function JoinUsPage() {
                   </div>
                 </div>
                 {abnError && <p className="text-xs text-red-400 -mt-2">{abnError}</p>}
-                {abnValid && (
-                  <p className="text-xs text-green-400 -mt-2">
-                    Found: <span className="font-medium">{form.businessName}</span>
-                  </p>
+                {abnValid && abnMeta && (
+                  <div className="rounded-xl border border-green-500/25 bg-green-500/5 px-4 py-3 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Check size={14} weight="bold" className="text-green-400 shrink-0" />
+                      <span className="text-xs font-semibold text-green-400 uppercase tracking-wide">ABN verified</span>
+                      {abnMeta.status && (
+                        <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${abnMeta.status === "Active" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                          {abnMeta.status}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold text-white">{form.businessName}</p>
+                    {(abnMeta.entityType || abnMeta.state) && (
+                      <p className="text-xs text-white/40">
+                        {[abnMeta.entityType, abnMeta.state && abnMeta.postcode ? `${abnMeta.state} ${abnMeta.postcode}` : abnMeta.state].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                    <p className="text-xs text-white/30 pt-0.5">Not your business? You can edit the name on the next step.</p>
+                  </div>
                 )}
                 <NextButton disabled={!canAdvance()} onClick={goNext} />
               </StepShell>
@@ -697,12 +727,17 @@ export default function JoinUsPage() {
                   <CheckCircle size={40} weight="fill" className="text-green-400" />
                 </motion.div>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <h1 className="text-3xl sm:text-4xl font-bold text-white font-[family-name:var(--font-heading)]">
-                    You&apos;re in, {form.fullName.split(" ")[0]}!
+                    You&apos;re officially signed up.
                   </h1>
-                  <p className="text-white/50 text-base max-w-md mx-auto">
-                    Our team will call you within 24 hours to match you with jobs in your area.
+                  <p className="text-white/60 text-base max-w-md mx-auto leading-relaxed">
+                    Your details are now in our contractor network, and our team will be in touch
+                    when suitable opportunities become available in your service area.
+                  </p>
+                  <p className="text-white/35 text-sm max-w-md mx-auto leading-relaxed">
+                    We&apos;ll review your details and contact you when there&apos;s a relevant
+                    homeowner enquiry that matches your trade and location.
                   </p>
                 </div>
 
