@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -75,6 +75,36 @@ const pageVariants = {
 };
 
 const pageTransition = { type: "spring" as const, stiffness: 300, damping: 30 };
+
+// ── ABN Types & Utilities ─────────────────────────────────────────────
+interface AbnResult {
+  abn: string;
+  name: string;
+  entityType: string;
+  state: string;
+  postcode: string;
+  status: string;
+}
+
+function formatABN(abn: string): string {
+  const d = abn.replace(/\s/g, "");
+  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/, "$1 $2 $3 $4");
+}
+
+function validateWebsite(url: string): { valid: boolean; normalized: string; error: string } {
+  const trimmed = url.trim();
+  if (!trimmed) return { valid: false, normalized: "", error: "" };
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withProtocol);
+    if (!parsed.hostname.includes(".")) {
+      return { valid: false, normalized: trimmed, error: "Enter a valid website address (e.g. yourbusiness.com.au)" };
+    }
+    return { valid: true, normalized: withProtocol, error: "" };
+  } catch {
+    return { valid: false, normalized: trimmed, error: "Enter a valid website address (e.g. yourbusiness.com.au)" };
+  }
+}
 
 // ── Form State ────────────────────────────────────────────────────────
 interface FormState {
@@ -248,6 +278,8 @@ export default function JoinUsPage() {
   const [step, setStep] = useState(0); // 0=welcome, 1-11=form, 12=success
   const [dir, setDir] = useState(1);
   const [form, setForm] = useState<FormState>(INITIAL);
+  const [abnQuery, setAbnQuery] = useState("");
+  const [abnResults, setAbnResults] = useState<AbnResult[]>([]);
   const [abnLooking, setAbnLooking] = useState(false);
   const [abnValid, setAbnValid] = useState(false);
   const [abnError, setAbnError] = useState("");
@@ -258,6 +290,8 @@ export default function JoinUsPage() {
     status: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [websiteError, setWebsiteError] = useState("");
   const abnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useJoinUsPixel();
 
@@ -270,54 +304,99 @@ export default function JoinUsPage() {
     setStep((s) => s - 1);
   }
 
-  // ABN lookup
-  const lookupABN = useCallback((abn: string) => {
+  // Dual-mode ABN search: 11 digits → direct lookup, ≥3 chars → name search
+  function searchABN(query: string) {
     if (abnTimerRef.current) clearTimeout(abnTimerRef.current);
-    const digits = abn.replace(/\s/g, "");
+    const digits = query.replace(/\s/g, "");
+
     setAbnValid(false);
-    if (digits.length !== 11) {
-      setAbnError("");
-      return;
-    }
+    setAbnError("");
+    setAbnResults([]);
+    setAbnMeta(null);
+
+    if (!query.trim()) return;
+
     abnTimerRef.current = setTimeout(async () => {
       setAbnLooking(true);
-      setAbnError("");
-      setAbnMeta(null);
       try {
-        const res = await fetch(
-          `https://abr.business.gov.au/json/AbnDetails.aspx?abn=${digits}&callback=c`
-        );
-        const text = await res.text();
-        const json = JSON.parse(text.replace(/^c\(/, "").replace(/\)$/, ""));
-        if (json.Abn && json.EntityName) {
-          setForm((p) => ({ ...p, businessName: json.EntityName }));
-          setAbnValid(true);
-          setAbnError("");
-          setAbnMeta({
-            entityType: json.EntityTypeName || "",
-            state: json.AddressState || "",
-            postcode: json.AddressPostcode || "",
-            status: json.AbnStatus || "",
-          });
-        } else {
-          setAbnError(json.Message || "ABN not found");
+        if (/^\d{11}$/.test(digits)) {
+          // Direct ABN lookup by number
+          const res = await fetch(
+            `https://abr.business.gov.au/json/AbnDetails.aspx?abn=${digits}&callback=c`
+          );
+          const text = await res.text();
+          const json = JSON.parse(text.replace(/^c\(/, "").replace(/\)$/, ""));
+          if (json.Abn && json.EntityName) {
+            selectAbnResult({
+              abn: digits,
+              name: json.EntityName,
+              entityType: json.EntityTypeName || "",
+              state: json.AddressState || "",
+              postcode: json.AddressPostcode || "",
+              status: json.AbnStatus || "",
+            });
+          } else {
+            setAbnError(json.Message || "ABN not found");
+          }
+        } else if (query.trim().length >= 3) {
+          // Name search
+          const res = await fetch(
+            `https://abr.business.gov.au/json/MatchingNames.aspx?name=${encodeURIComponent(query.trim())}&maxResults=10&callback=c`
+          );
+          const text = await res.text();
+          const json = JSON.parse(text.replace(/^c\(/, "").replace(/\)$/, ""));
+          const names: AbnResult[] = (json.Names || []).map(
+            (n: { Abn: string; Name: string; State?: string; Postcode?: string; AbnStatus?: string }) => ({
+              abn: n.Abn,
+              name: n.Name,
+              entityType: "",
+              state: n.State || "",
+              postcode: n.Postcode || "",
+              status: n.AbnStatus || "",
+            })
+          );
+          setAbnResults(names);
         }
       } catch {
-        setAbnError("Could not verify ABN. Enter business name manually.");
+        setAbnError("Could not connect to ABR. Enter your ABN or business name manually.");
       } finally {
         setAbnLooking(false);
       }
     }, 500);
-  }, []);
+  }
+
+  function selectAbnResult(result: AbnResult) {
+    setForm((p) => ({
+      ...p,
+      abn: formatABN(result.abn),
+      businessName: result.name,
+    }));
+    setAbnQuery(result.name || formatABN(result.abn));
+    setAbnValid(true);
+    setAbnError("");
+    setAbnResults([]);
+    setAbnMeta({
+      entityType: result.entityType,
+      state: result.state,
+      postcode: result.postcode,
+      status: result.status,
+    });
+  }
+
+  function skipAbn() {
+    setAbnValid(true);
+    setAbnResults([]);
+    setAbnError("");
+  }
 
   // Can advance?
   function canAdvance(): boolean {
     switch (step) {
       case 1: return form.fullName.trim().length > 0;
-      case 2: return form.abn.replace(/\s/g, "").length === 11;
+      case 2: return abnValid;
       case 3: return form.businessName.trim().length > 0;
       case 4: return form.tradeType !== "";
-      case 5: return form.website.trim().length > 0;
+      case 5: return validateWebsite(form.website).valid;
       case 6: return form.yearsInBusiness !== "";
       case 7: return form.locationBasedIn.trim().length > 0;
       case 8: return form.locationsServiced.trim().length > 0;
@@ -330,15 +409,17 @@ export default function JoinUsPage() {
   // Submit
   async function handleSubmit() {
     setSubmitting(true);
+    setSubmitError("");
     try {
       const tradieId = generateTradieId();
+      const websiteNormalized = validateWebsite(form.website).normalized || form.website;
       const payload = {
         tradie_id: tradieId,
         full_name: form.fullName,
         abn: form.abn.replace(/\s/g, ""),
         business_name: form.businessName,
         trade_type: form.tradeType,
-        website: form.website,
+        website: websiteNormalized,
         years_in_business: form.yearsInBusiness,
         location_based_in: form.locationBasedIn,
         locations_serviced: form.locationsServiced,
@@ -351,19 +432,25 @@ export default function JoinUsPage() {
       };
       const url =
         process.env.NEXT_PUBLIC_N8N_WEBHOOK_JOINUS ||
-        "https://dimitrik.app.n8n.cloud/webhook/tradie-signup";
-      await fetch(url, {
+        "https://dimitrik.app.n8n.cloud/webhook/tradiesignup";
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }).catch(() => {});
+      });
+      if (!res.ok) {
+        setSubmitError("Something went wrong submitting your application. Please try again.");
+        setSubmitting(false);
+        return;
+      }
       trackJoinUsLead();
+      setDir(1);
+      setStep(12);
     } catch {
-      // non-blocking
+      setSubmitError("Network error. Please check your connection and try again.");
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
-    setDir(1);
-    setStep(12);
   }
 
   // After phone verify — must set step explicitly, not goNext(),
@@ -457,31 +544,64 @@ export default function JoinUsPage() {
               </StepShell>
             )}
 
-            {/* Step 2 — ABN */}
+            {/* Step 2 — ABN search */}
             {step === 2 && (
               <StepShell key="s2" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="What&apos;s your ABN?" />
+                <StepHeader
+                  label="Find your business"
+                  sub="Search by business name or enter your 11-digit ABN directly."
+                />
                 <div className="relative">
                   <MagnifyingGlass size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   <input
                     type="text"
-                    value={form.abn}
+                    value={abnQuery}
                     onChange={(e) => {
-                      setForm((p) => ({ ...p, abn: e.target.value }));
-                      lookupABN(e.target.value);
+                      setAbnQuery(e.target.value);
+                      searchABN(e.target.value);
                     }}
-                    placeholder="XX XXX XXX XXX"
-                    maxLength={14}
+                    placeholder="Business name or ABN..."
                     className={`${INPUT} pl-12 pr-12`}
-                    inputMode="numeric"
                     autoFocus
+                    autoComplete="off"
                   />
                   <div className="absolute right-4 top-1/2 -translate-y-1/2">
                     {abnLooking && <CircleNotch size={18} className="animate-spin text-orange-safety" />}
                     {abnValid && !abnLooking && <Check size={18} weight="bold" className="text-green-400" />}
                   </div>
                 </div>
+
+                {/* Dropdown results */}
+                {abnResults.length > 0 && !abnValid && (
+                  <div className="rounded-xl border border-white/10 bg-gray-dark overflow-hidden -mt-2">
+                    {abnResults.map((result) => (
+                      <button
+                        key={result.abn}
+                        type="button"
+                        onClick={() => selectAbnResult(result)}
+                        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors cursor-pointer border-b border-white/5 last:border-0"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white font-medium truncate">{result.name}</p>
+                          <p className="text-xs text-white/40 mt-0.5">
+                            ABN {formatABN(result.abn)}
+                            {result.state ? ` · ${result.state}` : ""}
+                            {result.postcode ? ` ${result.postcode}` : ""}
+                          </p>
+                        </div>
+                        {result.status && (
+                          <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${result.status === "Active" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                            {result.status}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {abnError && <p className="text-xs text-red-400 -mt-2">{abnError}</p>}
+
+                {/* Verified card */}
                 {abnValid && abnMeta && (
                   <div className="rounded-xl border border-green-500/25 bg-green-500/5 px-4 py-3 space-y-1">
                     <div className="flex items-center gap-2">
@@ -494,6 +614,7 @@ export default function JoinUsPage() {
                       )}
                     </div>
                     <p className="text-sm font-semibold text-white">{form.businessName}</p>
+                    <p className="text-xs text-white/40">ABN {form.abn}</p>
                     {(abnMeta.entityType || abnMeta.state) && (
                       <p className="text-xs text-white/40">
                         {[abnMeta.entityType, abnMeta.state && abnMeta.postcode ? `${abnMeta.state} ${abnMeta.postcode}` : abnMeta.state].filter(Boolean).join(" · ")}
@@ -502,6 +623,18 @@ export default function JoinUsPage() {
                     <p className="text-xs text-white/30 pt-0.5">Not your business? You can edit the name on the next step.</p>
                   </div>
                 )}
+
+                {/* Skip link — no ABN / sole trader */}
+                {!abnValid && (
+                  <button
+                    type="button"
+                    onClick={skipAbn}
+                    className="text-xs text-white/30 hover:text-white/60 transition-colors text-left"
+                  >
+                    I don&apos;t have an ABN or can&apos;t find my business — skip this step
+                  </button>
+                )}
+
                 <NextButton disabled={!canAdvance()} onClick={goNext} />
               </StepShell>
             )}
@@ -548,19 +681,36 @@ export default function JoinUsPage() {
             {step === 5 && (
               <StepShell key="s5" dir={dir} step={step} onBack={goBack}>
                 <StepHeader label="What&apos;s your business website?" />
-                <div className="relative">
-                  <Globe size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                  <input
-                    type="url"
-                    value={form.website}
-                    onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))}
-                    placeholder="https://yourbusiness.com.au"
-                    className={`${INPUT} pl-12`}
-                    autoComplete="url"
-                    autoFocus
-                  />
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Globe size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                    <input
+                      type="url"
+                      value={form.website}
+                      onChange={(e) => {
+                        setForm((p) => ({ ...p, website: e.target.value }));
+                        const { error } = validateWebsite(e.target.value);
+                        setWebsiteError(error);
+                      }}
+                      placeholder="yourbusiness.com.au"
+                      className={`${INPUT} pl-12`}
+                      autoComplete="url"
+                      autoFocus
+                    />
+                  </div>
+                  {websiteError && (
+                    <p className="text-xs text-red-400">{websiteError}</p>
+                  )}
                 </div>
-                <NextButton disabled={!canAdvance()} onClick={goNext} />
+                <NextButton
+                  disabled={!canAdvance()}
+                  onClick={() => {
+                    // Normalize URL before advancing
+                    const { normalized } = validateWebsite(form.website);
+                    if (normalized) setForm((p) => ({ ...p, website: normalized }));
+                    goNext();
+                  }}
+                />
               </StepShell>
             )}
 
@@ -689,6 +839,9 @@ export default function JoinUsPage() {
                     autoFocus
                   />
                 </div>
+                {submitError && (
+                  <p className="text-xs text-red-400 text-center">{submitError}</p>
+                )}
                 <button
                   onClick={handleSubmit}
                   disabled={!canAdvance() || submitting}
