@@ -13,8 +13,12 @@ if (!SPREADSHEET_ID) {
 
 // Tab names — must match the actual Google Sheet tab names exactly
 export const TABS = {
-  LEADS: "Leads",
-  TRADIES: "Tradies",
+  LANDSCAPING: "Landscaping",
+  ROOFING: "Roofing",
+  SOLAR: "Solar",
+  HVAC: "HVAC",
+  GRANNYFLATS: "Grannyflat",
+  TRADIES: "TradieSignups",
   ASSIGNMENTS: "Assignments",
 } as const;
 
