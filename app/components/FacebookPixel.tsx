@@ -50,9 +50,10 @@ export default function FacebookPixel({ pixelId }: FacebookPixelProps) {
   );
 }
 
-/** Call this from estimator components after a successful quote */
-export function trackFacebookLead() {
+/** Call this from estimator/signup components after a successful submission.
+ *  Pass eventID to enable Meta deduplication against a matching CAPI event. */
+export function trackFacebookLead(eventID?: string) {
   if (typeof window !== "undefined" && typeof window.fbq === "function") {
-    window.fbq("track", "Lead");
+    window.fbq("track", "Lead", {}, eventID ? { eventID } : undefined);
   }
 }

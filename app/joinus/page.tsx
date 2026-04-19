@@ -22,7 +22,9 @@ import {
   Check,
 } from "@phosphor-icons/react";
 import PhoneVerify from "../components/PhoneVerify";
+import FacebookPixel, { trackFacebookLead } from "../components/FacebookPixel";
 import { generateTradieId } from "@/lib/utils/ids";
+import { sendJoinUsCapi } from "../actions/joinus-capi";
 
 // ── Constants ─────────────────────────────────────────────────────────
 const TOTAL_STEPS = 11; // steps 1-11 (0 = welcome, 12 = success)
@@ -243,35 +245,7 @@ function SuburbSearchInput({
   );
 }
 
-// ── Facebook Pixel ────────────────────────────────────────────────────
 const JOINUS_PIXEL_ID = "744412482022839";
-
-function useJoinUsPixel() {
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // Inject pixel script once
-    if (!(window as { fbq?: unknown }).fbq) {
-      const script = document.createElement("script");
-      script.innerHTML = `
-        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-        n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-        n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-        t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
-        (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-        fbq('init','${JOINUS_PIXEL_ID}');
-        fbq('track','PageView');
-      `;
-      document.head.appendChild(script);
-    } else {
-      (window as { fbq?: (...args: unknown[]) => void }).fbq?.("init", JOINUS_PIXEL_ID);
-      (window as { fbq?: (...args: unknown[]) => void }).fbq?.("track", "PageView");
-    }
-  }, []);
-}
-
-function trackJoinUsLead() {
-  (window as { fbq?: (...args: unknown[]) => void }).fbq?.("track", "Lead");
-}
 
 // ── Main Component ────────────────────────────────────────────────────
 export default function JoinUsPage() {
@@ -293,7 +267,17 @@ export default function JoinUsPage() {
   const [submitError, setSubmitError] = useState("");
   const [websiteError, setWebsiteError] = useState("");
   const abnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useJoinUsPixel();
+
+  // CAPI PageView — fires once on mount; browser PageView handled by <FacebookPixel>
+  useEffect(() => {
+    const eventId = `pv-joinus-${Date.now()}`;
+    sendJoinUsCapi({
+      eventName: "PageView",
+      eventId,
+      sourceUrl: window.location.href,
+      clientUserAgent: navigator.userAgent,
+    });
+  }, []);
 
   function goNext() {
     setDir(1);
@@ -393,7 +377,7 @@ export default function JoinUsPage() {
   function canAdvance(): boolean {
     switch (step) {
       case 1: return form.fullName.trim().length > 0;
-      case 2: return abnValid;
+      case 2: return true;
       case 3: return form.businessName.trim().length > 0;
       case 4: return form.tradeType !== "";
       case 5: return validateWebsite(form.website).valid;
@@ -447,7 +431,17 @@ export default function JoinUsPage() {
         setSubmitting(false);
         return;
       }
-      trackJoinUsLead();
+      // Browser Lead + CAPI Lead with matching event_id for deduplication
+      const leadEventId = crypto.randomUUID();
+      trackFacebookLead(leadEventId);
+      sendJoinUsCapi({
+        eventName: "Lead",
+        eventId: leadEventId,
+        sourceUrl: window.location.href,
+        email: form.email,
+        phone: form.phone,
+        clientUserAgent: navigator.userAgent,
+      });
       setDir(1);
       setStep(12);
     } catch (err) {
@@ -471,6 +465,7 @@ export default function JoinUsPage() {
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="min-h-[calc(100dvh-64px)] flex flex-col">
+      <FacebookPixel pixelId={JOINUS_PIXEL_ID} />
       {/* Progress bar */}
       {step >= 1 && step <= 11 && (
         <div className="w-full h-1 bg-white/5">
@@ -553,8 +548,8 @@ export default function JoinUsPage() {
             {step === 2 && (
               <StepShell key="s2" dir={dir} step={step} onBack={goBack}>
                 <StepHeader
-                  label="Find your business"
-                  sub="Search by business name or enter your 11-digit ABN directly."
+                  label="Find your business (optional)"
+                  sub="Skip ahead if you don&apos;t have your ABN handy — you can provide it later."
                 />
                 <div className="relative">
                   <MagnifyingGlass size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
@@ -627,17 +622,6 @@ export default function JoinUsPage() {
                     )}
                     <p className="text-xs text-white/30 pt-0.5">Not your business? You can edit the name on the next step.</p>
                   </div>
-                )}
-
-                {/* Skip link — no ABN / sole trader */}
-                {!abnValid && (
-                  <button
-                    type="button"
-                    onClick={skipAbn}
-                    className="text-xs text-white/30 hover:text-white/60 transition-colors text-left"
-                  >
-                    I don&apos;t have an ABN or can&apos;t find my business — skip this step
-                  </button>
                 )}
 
                 <NextButton disabled={!canAdvance()} onClick={goNext} />
