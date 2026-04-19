@@ -433,12 +433,16 @@ export default function JoinUsPage() {
       const url =
         process.env.NEXT_PUBLIC_N8N_WEBHOOK_JOINUS ||
         "https://dimitrik.app.n8n.cloud/webhook/tradiesignup";
+      console.log("[joinus] Submitting to:", url);
+      console.log("[joinus] Payload:", JSON.stringify(payload));
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      console.log("[joinus] Response status:", res.status, res.statusText);
       if (!res.ok) {
+        console.error("[joinus] Webhook failed:", res.status, res.statusText);
         setSubmitError("Something went wrong submitting your application. Please try again.");
         setSubmitting(false);
         return;
@@ -446,7 +450,8 @@ export default function JoinUsPage() {
       trackJoinUsLead();
       setDir(1);
       setStep(12);
-    } catch {
+    } catch (err) {
+      console.error("[joinus] Network error:", err);
       setSubmitError("Network error. Please check your connection and try again.");
     } finally {
       setSubmitting(false);
