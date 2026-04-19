@@ -1,0 +1,3 @@
+# Workflow snapshots may contain credentials embedded in node parameters.
+# Never commit these to git.
+*.json

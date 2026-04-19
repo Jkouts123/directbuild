@@ -9,7 +9,10 @@
     "sheets:ensure-leads": "ts-node --project scripts/tsconfig.json scripts/sheets/ensureLeadSchema.ts",
     "sheets:ensure-tradies": "ts-node --project scripts/tsconfig.json scripts/sheets/ensureTradiesSchema.ts",
     "sheets:ensure-assignments": "ts-node --project scripts/tsconfig.json scripts/sheets/ensureAssignmentsTab.ts",
-    "sheets:backfill-ids": "ts-node --project scripts/tsconfig.json scripts/sheets/backfillIds.ts"
+    "sheets:backfill-ids": "ts-node --project scripts/tsconfig.json scripts/sheets/backfillIds.ts",
+    "n8n:list": "ts-node --project scripts/tsconfig.json scripts/n8n/listWorkflows.ts",
+    "n8n:get": "ts-node --project scripts/tsconfig.json scripts/n8n/getWorkflow.ts",
+    "n8n:patch": "ts-node --project scripts/tsconfig.json scripts/n8n/patchWorkflow.ts"
   },
   "engines": {
     "node": "22.x"
