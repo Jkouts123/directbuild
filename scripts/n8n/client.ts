@@ -28,6 +28,7 @@ export interface N8nWorkflow extends N8nWorkflowSummary {
   nodes: N8nNode[];
   connections: Record<string, unknown>;
   settings: Record<string, unknown>;
+  staticData: unknown;
   tags: unknown[];
 }
 
@@ -77,13 +78,26 @@ export async function getWorkflow(id: string): Promise<N8nWorkflow> {
 
 /**
  * Update a workflow by ID.
- * The body must be the COMPLETE workflow object (n8n PUT replaces, not patches).
- * Always fetch the current workflow first and mutate the result.
+ * n8n's PUT endpoint only accepts a subset of the workflow object.
+ * Strip read-only / computed properties before sending.
  */
 export async function updateWorkflow(id: string, workflow: N8nWorkflow): Promise<N8nWorkflow> {
+  // Only send fields accepted by the n8n REST API v1 PUT /workflows/{id} schema.
+  // Sending extra properties (shared, pinData, versionId, etc.) causes 400.
+  // Strip non-writable properties from settings (API rejects unknown keys)
+  const { availableInMCP: _a, timeSavedMode: _t, ...cleanSettings } =
+    (workflow.settings ?? {}) as Record<string, unknown>;
+
+  const body = {
+    name:        workflow.name,
+    nodes:       workflow.nodes,
+    connections: workflow.connections,
+    settings:    cleanSettings,
+    staticData:  workflow.staticData ?? null,
+  };
   return apiFetch<N8nWorkflow>(`/workflows/${id}`, {
     method: "PUT",
-    body: JSON.stringify(workflow),
+    body: JSON.stringify(body),
   });
 }
 
