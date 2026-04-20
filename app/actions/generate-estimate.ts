@@ -418,7 +418,13 @@ export async function generateEstimate(
     // Save to Supabase + notify n8n (non-blocking, parallel)
     const suburb = String(request.formData.suburb || request.formData.location_suburb || "");
 
-    const saveToSupabase: Promise<void> = supabase
+    // Supabase insert is gated behind ENABLE_SUPABASE_LEADS. n8n + Google
+    // Sheets are the operational source of truth; Supabase is off by default
+    // to avoid noisy side-effect failures. Set ENABLE_SUPABASE_LEADS=true to
+    // re-enable when the Supabase project is back online.
+    const SUPABASE_ENABLED = process.env.ENABLE_SUPABASE_LEADS === "true";
+
+    const saveToSupabase: Promise<void> = SUPABASE_ENABLED && supabase
       ? Promise.resolve(
           supabase.from("leads").insert({
             // lead_id omitted until the column exists in the Supabase table
