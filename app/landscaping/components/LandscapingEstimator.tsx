@@ -219,7 +219,10 @@ export default function LandscapingEstimator() {
       setStep(8);
     } catch (err) {
       console.error("Estimate failed:", err);
-      setSubmitError("Something went wrong generating your estimate. Please try again.");
+      const msg = err instanceof Error && err.message
+        ? err.message
+        : "Something went wrong generating your estimate. Please try again.";
+      setSubmitError(msg);
     } finally {
       setLoading(false);
     }

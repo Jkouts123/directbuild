@@ -85,6 +85,41 @@ function extractFirstJsonObject(text: string): string | null {
   return null;
 }
 
+// ── Retry + transient-failure handling ───────────────────────────────
+
+const BUSY_ERROR_MESSAGE =
+  "Our estimate engine is busy right now. Please try again in a moment.";
+
+function isTransientGeminiError(err: unknown): boolean {
+  const e = err as { status?: number; message?: string };
+  if (e?.status === 503 || e?.status === 429) return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return /\b503\b|\b429\b|overloaded|unavailable|too many requests|rate limit/.test(msg);
+}
+
+async function callGeminiWithRetry<T>(
+  fn: () => Promise<T>,
+  serviceType: string,
+  maxRetries = 2,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientGeminiError(err) || attempt === maxRetries) throw err;
+      const delay = 500 * Math.pow(3, attempt); // 500ms, 1500ms
+      const message = (err as Error)?.message ?? String(err);
+      console.warn(
+        `[generateEstimate] Transient Gemini error for ${serviceType} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms: ${message}`,
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 // ── Jason Gap Rules ───────────────────────────────────────────────────
 function calculateGap(centerPrice: number): number {
   let gap: number;
@@ -284,17 +319,27 @@ export async function generateEstimate(
 
     let result;
     try {
-      result = await model.generateContent({
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          // @ts-expect-error thinkingConfig is supported in v1beta but not in SDK types yet
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      });
+      result = await callGeminiWithRetry(
+        () =>
+          model.generateContent({
+            contents: [{ role: "user", parts }],
+            generationConfig: {
+              // @ts-expect-error thinkingConfig is supported in v1beta but not in SDK types yet
+              thinkingConfig: { thinkingBudget: 0 },
+            },
+          }),
+        request.serviceType,
+      );
     } catch (geminiErr) {
+      if (isTransientGeminiError(geminiErr)) {
+        console.error(
+          `[generateEstimate] Gemini unavailable for ${request.serviceType} after retries — returning busy error`,
+        );
+        throw new Error(BUSY_ERROR_MESSAGE);
+      }
       console.error(
         `[generateEstimate] Gemini API error for ${request.serviceType}:`,
-        JSON.stringify(geminiErr, Object.getOwnPropertyNames(geminiErr as object))
+        JSON.stringify(geminiErr, Object.getOwnPropertyNames(geminiErr as object)),
       );
       throw geminiErr;
     }
