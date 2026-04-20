@@ -25,6 +25,7 @@ import PhoneVerify from "../components/PhoneVerify";
 import FacebookPixel, { trackFacebookLead } from "../components/FacebookPixel";
 import { generateTradieId } from "@/lib/utils/ids";
 import { sendJoinUsCapi } from "../actions/joinus-capi";
+import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
 
 // ── Constants ─────────────────────────────────────────────────────────
 const TOTAL_STEPS = 11; // steps 1-11 (0 = welcome, 12 = success)
@@ -779,12 +780,14 @@ export default function JoinUsPage() {
                 <button
                   onClick={() => {
                     setDir(1);
-                    setStep(99); // OTP screen
+                    // When OTP is disabled, jump straight to email step (10).
+                    // Step 99 is the OTP overlay — skip it entirely.
+                    setStep(OTP_VERIFICATION_ENABLED ? 99 : 10);
                   }}
                   disabled={!canAdvance()}
                   className={`${BTN_PRIMARY} ${!canAdvance() ? "opacity-40 pointer-events-none" : ""}`}
                 >
-                  Verify with SMS
+                  {OTP_VERIFICATION_ENABLED ? "Verify with SMS" : "Continue"}
                   <ArrowRight size={18} weight="bold" />
                 </button>
               </StepShell>

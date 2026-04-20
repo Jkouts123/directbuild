@@ -4,6 +4,7 @@ import { useState } from "react";
 import { User, Phone, Mail, ArrowRight, ArrowLeft, ShieldCheck } from "lucide-react";
 import PhoneVerify from "./PhoneVerify";
 import SampleQuotePreview from "./SampleQuotePreview";
+import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
 
 interface LeadCaptureProps {
   firstName: string;
@@ -39,6 +40,10 @@ export default function LeadCapture({
   const isValid = firstName.trim().length > 0 && phone.trim().length >= 8;
 
   function handleVerifyClick() {
+    if (!OTP_VERIFICATION_ENABLED) {
+      onSubmit();
+      return;
+    }
     setShowOTP(true);
   }
 
@@ -47,8 +52,8 @@ export default function LeadCapture({
     setShowOTP(false);
   }
 
-  // OTP overlay
-  if (showOTP) {
+  // OTP overlay (only when feature flag is enabled)
+  if (showOTP && OTP_VERIFICATION_ENABLED) {
     return (
       <PhoneVerify
         phone={phone}
@@ -155,15 +160,17 @@ export default function LeadCapture({
                 loading || !isValid ? "opacity-40 pointer-events-none" : ""
               }`}
             >
-              Verify & Get My {serviceName} Quote
+              {OTP_VERIFICATION_ENABLED ? `Verify & Get My ${serviceName} Quote` : `Get My ${serviceName} Quote`}
               <ArrowRight size={18} />
             </button>
 
-            {/* Trust signal */}
-            <div className="flex items-center justify-center gap-2 text-xs text-gray-text">
-              <ShieldCheck size={14} className="text-orange-safety" />
-              <span>We&apos;ll send a quick SMS to verify your number. No spam, ever.</span>
-            </div>
+            {/* Trust signal — only shown when OTP is active */}
+            {OTP_VERIFICATION_ENABLED && (
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-text">
+                <ShieldCheck size={14} className="text-orange-safety" />
+                <span>We&apos;ll send a quick SMS to verify your number. No spam, ever.</span>
+              </div>
+            )}
           </div>
 
           {/* Sample quote preview */}
