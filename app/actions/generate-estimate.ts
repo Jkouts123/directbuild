@@ -36,6 +36,55 @@ export interface EstimateResult {
   estimatedSavings?: number;
 }
 
+// ── Response helpers ──────────────────────────────────────────────────
+
+// Manually extract text from Gemini response candidates. The SDK's
+// response.text() helper throws when finishReason is SAFETY/RECITATION/etc
+// or when parts are empty. We bypass that so we can surface a specific
+// error to the caller instead of a generic 500.
+interface GeminiPart { text?: string }
+interface GeminiCandidate {
+  content?: { parts?: GeminiPart[] };
+  finishReason?: string;
+}
+
+function extractResponseText(candidate: GeminiCandidate | undefined): string {
+  const parts = candidate?.content?.parts ?? [];
+  return parts
+    .map((p) => (p && typeof p.text === "string" ? p.text : ""))
+    .join("");
+}
+
+// Walks the string tracking brace depth while respecting JSON string
+// escaping, returning the first balanced {...} block. Greedy
+// match(/\{[\s\S]*\}/) fails when the model emits a preamble object
+// (e.g. thinking traces) before the real JSON.
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) { escape = false; continue; }
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === "\"") { inString = false; continue; }
+      continue;
+    }
+    if (ch === "\"") { inString = true; continue; }
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 // ── Jason Gap Rules ───────────────────────────────────────────────────
 function calculateGap(centerPrice: number): number {
   let gap: number;
@@ -250,26 +299,32 @@ export async function generateEstimate(
       throw geminiErr;
     }
 
-    let responseText: string;
-    try {
-      responseText = result.response.text();
-    } catch (textErr) {
-      console.error(
-        "[generateEstimate] result.response.text() threw:",
-        JSON.stringify(textErr, Object.getOwnPropertyNames(textErr as object))
-      );
-      console.error(
-        "[generateEstimate] Raw candidates:",
-        JSON.stringify(result.response.candidates?.slice(0, 1))
-      );
-      throw textErr;
+    // Safely pull candidate + finishReason without invoking the SDK's
+    // throwing .text() helper.
+    const candidate = result.response.candidates?.[0] as GeminiCandidate | undefined;
+    const finishReason = candidate?.finishReason;
+
+    if (finishReason === "SAFETY" || finishReason === "RECITATION") {
+      console.error(`[generateEstimate] Gemini blocked response (finishReason=${finishReason})`);
+      throw new Error("Your input couldn't be processed by our AI. Please adjust the details and try again.");
     }
-    console.log(`[generateEstimate] Gemini response length: ${responseText.length} chars`);
+
+    const responseText = extractResponseText(candidate);
+    console.log(`[generateEstimate] Gemini response length: ${responseText.length} chars, finishReason: ${finishReason || "none"}`);
+
+    if (!responseText) {
+      console.error(
+        "[generateEstimate] Empty response text. Raw candidate:",
+        JSON.stringify(candidate)?.slice(0, 500)
+      );
+      throw new Error("The AI returned an empty response. Please try again.");
+    }
     console.log(`[generateEstimate] Response preview: ${responseText.slice(0, 300)}`);
 
-    // Parse JSON from response — strip markdown fencing and any leading text
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    // Find the first balanced JSON object — resilient to preamble text,
+    // markdown fencing, or a prefixed thinking block.
+    const jsonSnippet = extractFirstJsonObject(responseText);
+    if (!jsonSnippet) {
       console.error(`[generateEstimate] Could not find JSON in response:\n${responseText.slice(0, 500)}`);
       throw new Error("Failed to parse AI response — no JSON object found");
     }
@@ -283,11 +338,11 @@ export async function generateEstimate(
       estimatedSavings?: number;
     };
     try {
-      parsed = JSON.parse(jsonMatch[0]);
+      parsed = JSON.parse(jsonSnippet);
     } catch (parseErr) {
       console.error(
         "[generateEstimate] JSON.parse failed. Snippet being parsed:",
-        jsonMatch[0].slice(0, 300)
+        jsonSnippet.slice(0, 300)
       );
       throw parseErr;
     }
@@ -318,21 +373,25 @@ export async function generateEstimate(
     // Save to Supabase + notify n8n (non-blocking, parallel)
     const suburb = String(request.formData.suburb || request.formData.location_suburb || "");
 
-    const saveToSupabase = supabase.from("leads").insert({
-      // lead_id omitted until the column exists in the Supabase table
-      name: request.contact.firstName,
-      phone: request.contact.phone,
-      email: request.contact.email || null,
-      suburb,
-      service_type: request.serviceType,
-      user_input: request.formData,
-      ai_quote: estimate,
-      verified_phone: true,
-      created_at: new Date().toISOString(),
-    }).then(
-      ({ error }) => { if (error) console.error("[generateEstimate] Supabase insert failed:", error); },
-      (err) => console.error("[generateEstimate] Supabase insert rejected:", err)
-    );
+    const saveToSupabase: Promise<void> = supabase
+      ? Promise.resolve(
+          supabase.from("leads").insert({
+            // lead_id omitted until the column exists in the Supabase table
+            name: request.contact.firstName,
+            phone: request.contact.phone,
+            email: request.contact.email || null,
+            suburb,
+            service_type: request.serviceType,
+            user_input: request.formData,
+            ai_quote: estimate,
+            verified_phone: true,
+            created_at: new Date().toISOString(),
+          })
+        ).then(
+          ({ error }) => { if (error) console.error("[generateEstimate] Supabase insert failed:", error); },
+          (err) => console.error("[generateEstimate] Supabase insert rejected:", err)
+        )
+      : Promise.resolve();
 
     const notifyN8n = triggerN8nWebhook(request, estimate, suburb, leadId)
       .then(() => {}, (err) => console.error("n8n webhook failed:", err));
