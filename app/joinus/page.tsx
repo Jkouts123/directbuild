@@ -289,7 +289,8 @@ export default function JoinUsPage() {
     setStep((s) => s - 1);
   }
 
-  // Dual-mode ABN search: 11 digits → direct lookup, ≥3 chars → name search
+  // Dual-mode ABN search proxied through /api/abn-lookup (GUID server-side).
+  // 11 digits → direct ABN lookup; ≥3 chars → business name search.
   function searchABN(query: string) {
     if (abnTimerRef.current) clearTimeout(abnTimerRef.current);
     const digits = query.replace(/\s/g, "");
@@ -300,54 +301,42 @@ export default function JoinUsPage() {
     setAbnMeta(null);
 
     if (!query.trim()) return;
+    if (!/^\d{11}$/.test(digits) && query.trim().length < 3) return;
 
     abnTimerRef.current = setTimeout(async () => {
       setAbnLooking(true);
       try {
-        if (/^\d{11}$/.test(digits)) {
-          // Direct ABN lookup by number
-          const res = await fetch(
-            `https://abr.business.gov.au/json/AbnDetails.aspx?abn=${digits}&callback=c`
-          );
-          const text = await res.text();
-          const json = JSON.parse(text.replace(/^c\(/, "").replace(/\)$/, ""));
-          if (json.Abn && json.EntityName) {
-            selectAbnResult({
-              abn: digits,
-              name: json.EntityName,
-              entityType: json.EntityTypeName || "",
-              state: json.AddressState || "",
-              postcode: json.AddressPostcode || "",
-              status: json.AbnStatus || "",
-            });
-          } else {
-            setAbnError(json.Message || "ABN not found");
-          }
-        } else if (query.trim().length >= 3) {
-          // Name search
-          const res = await fetch(
-            `https://abr.business.gov.au/json/MatchingNames.aspx?name=${encodeURIComponent(query.trim())}&maxResults=10&callback=c`
-          );
-          const text = await res.text();
-          const json = JSON.parse(text.replace(/^c\(/, "").replace(/\)$/, ""));
-          const names: AbnResult[] = (json.Names || []).map(
-            (n: { Abn: string; Name: string; State?: string; Postcode?: string; AbnStatus?: string }) => ({
-              abn: n.Abn,
-              name: n.Name,
-              entityType: "",
-              state: n.State || "",
-              postcode: n.Postcode || "",
-              status: n.AbnStatus || "",
-            })
-          );
-          setAbnResults(names);
+        const res = await fetch(
+          `/api/abn-lookup?q=${encodeURIComponent(query.trim())}`
+        );
+        const json = (await res.json()) as {
+          results: AbnResult[];
+          error?: string;
+        };
+
+        if (!res.ok) {
+          setAbnError("Lookup unavailable. Enter your ABN or business name manually.");
+          return;
         }
+
+        // Single, exact ABN match → auto-select
+        if (/^\d{11}$/.test(digits) && json.results.length === 1) {
+          selectAbnResult(json.results[0]);
+          return;
+        }
+
+        if (json.error && json.results.length === 0) {
+          setAbnError(json.error);
+          return;
+        }
+
+        setAbnResults(json.results);
       } catch {
-        setAbnError("Could not connect to ABR. Enter your ABN or business name manually.");
+        setAbnError("Could not reach lookup. Enter your ABN or business name manually.");
       } finally {
         setAbnLooking(false);
       }
-    }, 500);
+    }, 400);
   }
 
   function selectAbnResult(result: AbnResult) {
