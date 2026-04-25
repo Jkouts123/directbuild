@@ -28,7 +28,7 @@ import { sendJoinUsCapi } from "../actions/joinus-capi";
 import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
 
 // ── Constants ─────────────────────────────────────────────────────────
-const TOTAL_STEPS = 11; // steps 1-11 (0 = welcome, 12 = success)
+const TOTAL_STEPS = 13; // steps 1-13 (0 = welcome, 14 = success, 99 = OTP overlay)
 
 const TRADE_TYPES = [
   "Roofer",
@@ -50,11 +50,14 @@ const YEARS_OPTIONS = [
   "10+ years",
 ];
 
+const CAPACITY_OPTIONS = ["1-2", "3-5", "6-9", "10+"];
+const JOB_SIZE_OPTIONS = ["Under $5k", "$5k-$20k", "$20k-$50k", "$50k+"];
+
 const VALUE_PROPS = [
-  { icon: Megaphone, text: "Paid Meta ads generating real leads" },
-  { icon: PhoneCall, text: "Leads sent directly to your phone" },
-  { icon: CurrencyDollar, text: "5% fee only if you win the job" },
-  { icon: Handshake, text: "Personal onboarding call within 24h" },
+  { icon: Megaphone, text: "Active paid campaigns generating real homeowner enquiries" },
+  { icon: PhoneCall, text: "Matched enquiries sent direct to your phone" },
+  { icon: CurrencyDollar, text: "No retainers — 5% only if the job proceeds" },
+  { icon: Handshake, text: "Personal onboarding call if accepted" },
 ];
 
 // ── Styles ────────────────────────────────────────────────────────────
@@ -119,6 +122,9 @@ interface FormState {
   yearsInBusiness: string;
   locationBasedIn: string;
   locationsServiced: string;
+  capacityPerMonth: string;
+  preferredJobSize: string;
+  canRespond24h: string;
   phone: string;
   email: string;
 }
@@ -132,6 +138,9 @@ const INITIAL: FormState = {
   yearsInBusiness: "",
   locationBasedIn: "",
   locationsServiced: "",
+  capacityPerMonth: "",
+  preferredJobSize: "",
+  canRespond24h: "",
   phone: "",
   email: "",
 };
@@ -367,15 +376,18 @@ export default function JoinUsPage() {
   function canAdvance(): boolean {
     switch (step) {
       case 1: return form.fullName.trim().length > 0;
-      case 2: return true;
+      case 2: return true; // ABN search optional — user may not have it handy
       case 3: return form.businessName.trim().length > 0;
       case 4: return form.tradeType !== "";
       case 5: return validateWebsite(form.website).valid;
       case 6: return form.yearsInBusiness !== "";
       case 7: return form.locationBasedIn.trim().length > 0;
       case 8: return form.locationsServiced.trim().length > 0;
-      case 9: return form.phone.trim().length >= 8;
-      case 10: return form.email.includes("@");
+      case 9: return form.capacityPerMonth !== "";
+      case 10: return form.preferredJobSize !== "";
+      case 11: return form.canRespond24h !== "";
+      case 12: return form.phone.trim().length >= 8;
+      case 13: return form.email.includes("@");
       default: return true;
     }
   }
@@ -397,6 +409,9 @@ export default function JoinUsPage() {
         years_in_business: form.yearsInBusiness,
         location_based_in: form.locationBasedIn,
         locations_serviced: form.locationsServiced,
+        capacity_per_month: form.capacityPerMonth,
+        preferred_job_size: form.preferredJobSize,
+        can_respond_24h: form.canRespond24h,
         phone: form.phone,
         email: form.email,
         verified_phone: true,
@@ -433,7 +448,7 @@ export default function JoinUsPage() {
         clientUserAgent: navigator.userAgent,
       });
       setDir(1);
-      setStep(12);
+      setStep(14);
     } catch (err) {
       console.error("[joinus] Network error:", err);
       setSubmitError("Network error. Please check your connection and try again.");
@@ -446,18 +461,18 @@ export default function JoinUsPage() {
   // because step 99 + 1 = 100 which has no JSX match → blank page
   function handlePhoneVerified() {
     setDir(1);
-    setStep(10);
+    setStep(13);
   }
 
-  // Progress (steps 1-11)
-  const progress = step >= 1 && step <= 11 ? step / TOTAL_STEPS : 0;
+  // Progress (steps 1-13)
+  const progress = step >= 1 && step <= 13 ? step / TOTAL_STEPS : 0;
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="min-h-[calc(100dvh-64px)] flex flex-col">
       <FacebookPixel pixelId={JOINUS_PIXEL_ID} />
       {/* Progress bar */}
-      {step >= 1 && step <= 11 && (
+      {step >= 1 && step <= 13 && (
         <div className="w-full h-1 bg-white/5">
           <motion.div
             className="h-full bg-orange-safety"
@@ -486,12 +501,12 @@ export default function JoinUsPage() {
               >
                 <div className="space-y-4">
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white font-[family-name:var(--font-heading)] leading-[1.1] tracking-tight">
-                    Join the Direct Build<br />tradie network
+                    Apply to join our<br />contractor network
                   </h1>
                   <p className="text-white/50 text-base sm:text-lg leading-relaxed max-w-[50ch]">
-                    We&apos;re running paid Meta ads generating homeowner leads across Australia.
-                    Join our network and we&apos;ll send leads directly to you — you only pay 5%
-                    if you win the job. Takes 2 minutes to apply.
+                    We work with a limited number of tradies per area. No monthly retainers —
+                    we only get paid if the job proceeds. This form puts you forward for review
+                    against incoming homeowner enquiries in your service area.
                   </p>
                 </div>
 
@@ -517,7 +532,7 @@ export default function JoinUsPage() {
             {/* Step 1 — Full name */}
             {step === 1 && (
               <StepShell key="s1" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="What&apos;s your full name?" />
+                <StepHeader label="Your full name" />
                 <div className="relative">
                   <User size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   <input
@@ -538,8 +553,8 @@ export default function JoinUsPage() {
             {step === 2 && (
               <StepShell key="s2" dir={dir} step={step} onBack={goBack}>
                 <StepHeader
-                  label="Find your business (optional)"
-                  sub="Skip ahead if you don&apos;t have your ABN handy — you can provide it later."
+                  label="Verify your business"
+                  sub="Search by business name or ABN. We use this to confirm you&apos;re operating under a registered Australian business."
                 />
                 <div className="relative">
                   <MagnifyingGlass size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
@@ -621,7 +636,7 @@ export default function JoinUsPage() {
             {/* Step 3 — Business name */}
             {step === 3 && (
               <StepShell key="s3" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="What&apos;s your business name?" sub={abnValid ? "Auto-filled from ABN — edit if needed." : undefined} />
+                <StepHeader label="Trading name" sub={abnValid ? "Auto-filled from ABN — edit if needed." : "The name you operate under."} />
                 <div className="relative">
                   <Briefcase size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   <input
@@ -640,7 +655,7 @@ export default function JoinUsPage() {
             {/* Step 4 — Trade type */}
             {step === 4 && (
               <StepShell key="s4" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="What&apos;s your trade?" />
+                <StepHeader label="Primary trade" sub="What type of work do you want to be considered for?" />
                 <select
                   value={form.tradeType}
                   onChange={(e) => setForm((p) => ({ ...p, tradeType: e.target.value }))}
@@ -659,7 +674,7 @@ export default function JoinUsPage() {
             {/* Step 5 — Website */}
             {step === 5 && (
               <StepShell key="s5" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="What&apos;s your business website?" />
+                <StepHeader label="Business presence" sub="Website or online presence we can use to verify your business — Instagram or Facebook page is fine." />
                 <div className="space-y-2">
                   <div className="relative">
                     <Globe size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
@@ -696,7 +711,7 @@ export default function JoinUsPage() {
             {/* Step 6 — Years in business */}
             {step === 6 && (
               <StepShell key="s6" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="How long have you been operating?" />
+                <StepHeader label="Business experience" sub="How long have you been operating under this business?" />
                 <div className="relative">
                   <Clock size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   <select
@@ -718,7 +733,7 @@ export default function JoinUsPage() {
             {/* Step 7 — Location based in */}
             {step === 7 && (
               <StepShell key="s7" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="Where are you based?" />
+                <StepHeader label="Where you&apos;re based" sub="The suburb you primarily operate from." />
                 <SuburbSearchInput
                   value={form.locationBasedIn}
                   onChange={(v) => setForm((p) => ({ ...p, locationBasedIn: v }))}
@@ -730,7 +745,7 @@ export default function JoinUsPage() {
             {/* Step 8 — Locations serviced */}
             {step === 8 && (
               <StepShell key="s8" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="What areas do you service?" />
+                <StepHeader label="Service area" sub="Where can you reliably take on new work? Be specific — this is what we match incoming homeowner enquiries against." />
                 <div className="relative">
                   <MapPin size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   <input
@@ -742,17 +757,59 @@ export default function JoinUsPage() {
                     autoFocus
                   />
                 </div>
-                <p className="text-xs text-white/30 -mt-1">
-                  Be as specific as possible so we can match you with the right jobs in your area.
-                </p>
                 <NextButton disabled={!canAdvance()} onClick={goNext} />
               </StepShell>
             )}
 
-            {/* Step 9 — Phone (with OTP) */}
+            {/* Step 9 — Current capacity (pills) */}
             {step === 9 && (
               <StepShell key="s9" dir={dir} step={step} onBack={goBack}>
-                <StepHeader label="What&apos;s your mobile number?" />
+                <StepHeader label="Current capacity" sub="How many additional jobs could you realistically take on per month?" />
+                <PillGrid
+                  options={CAPACITY_OPTIONS}
+                  value={form.capacityPerMonth}
+                  onChange={(v) => setForm((p) => ({ ...p, capacityPerMonth: v }))}
+                  cols={2}
+                />
+                <NextButton disabled={!canAdvance()} onClick={goNext} />
+              </StepShell>
+            )}
+
+            {/* Step 10 — Preferred job size (pills) */}
+            {step === 10 && (
+              <StepShell key="s10" dir={dir} step={step} onBack={goBack}>
+                <StepHeader label="Preferred job size" sub="What size jobs are you looking to win more of?" />
+                <PillGrid
+                  options={JOB_SIZE_OPTIONS}
+                  value={form.preferredJobSize}
+                  onChange={(v) => setForm((p) => ({ ...p, preferredJobSize: v }))}
+                  cols={2}
+                />
+                <NextButton disabled={!canAdvance()} onClick={goNext} />
+              </StepShell>
+            )}
+
+            {/* Step 11 — 24h response (yes/no pills) */}
+            {step === 11 && (
+              <StepShell key="s11" dir={dir} step={step} onBack={goBack}>
+                <StepHeader label="Response speed" sub="Can you reliably respond to new homeowner enquiries within 24 hours?" />
+                <PillGrid
+                  options={[
+                    { value: "yes", label: "Yes" },
+                    { value: "no", label: "No" },
+                  ]}
+                  value={form.canRespond24h}
+                  onChange={(v) => setForm((p) => ({ ...p, canRespond24h: v }))}
+                  cols={2}
+                />
+                <NextButton disabled={!canAdvance()} onClick={goNext} />
+              </StepShell>
+            )}
+
+            {/* Step 12 — Phone (with OTP) */}
+            {step === 12 && (
+              <StepShell key="s12" dir={dir} step={step} onBack={goBack}>
+                <StepHeader label="Mobile number" sub="We&apos;ll send a 6-digit verification code by SMS." />
                 <div className="relative">
                   <Phone size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   <input
@@ -769,9 +826,9 @@ export default function JoinUsPage() {
                 <button
                   onClick={() => {
                     setDir(1);
-                    // When OTP is disabled, jump straight to email step (10).
+                    // When OTP is disabled, jump straight to email step (13).
                     // Step 99 is the OTP overlay — skip it entirely.
-                    setStep(OTP_VERIFICATION_ENABLED ? 99 : 10);
+                    setStep(OTP_VERIFICATION_ENABLED ? 99 : 13);
                   }}
                   disabled={!canAdvance()}
                   className={`${BTN_PRIMARY} ${!canAdvance() ? "opacity-40 pointer-events-none" : ""}`}
@@ -798,16 +855,16 @@ export default function JoinUsPage() {
                   onVerified={handlePhoneVerified}
                   onCancel={() => {
                     setDir(-1);
-                    setStep(9);
+                    setStep(12);
                   }}
                 />
               </motion.div>
             )}
 
-            {/* Step 10 — Email */}
-            {step === 10 && (
-              <StepShell key="s10" dir={dir} step={step} onBack={() => { setDir(-1); setStep(9); }}>
-                <StepHeader label="What&apos;s your email address?" />
+            {/* Step 13 — Email */}
+            {step === 13 && (
+              <StepShell key="s13" dir={dir} step={step} onBack={() => { setDir(-1); setStep(12); }}>
+                <StepHeader label="Email address" sub="Used for onboarding and to send you matched enquiries." />
                 <div className="relative">
                   <Envelope size={20} weight="duotone" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   <input
@@ -840,8 +897,8 @@ export default function JoinUsPage() {
               </StepShell>
             )}
 
-            {/* Step 12 — Success */}
-            {step === 12 && (
+            {/* Step 14 — Success */}
+            {step === 14 && (
               <motion.div
                 key="success"
                 custom={dir}
@@ -850,7 +907,7 @@ export default function JoinUsPage() {
                 animate="center"
                 exit="exit"
                 transition={pageTransition}
-                className="text-center space-y-8 py-8"
+                className="space-y-8 py-8"
               >
                 <motion.div
                   initial={{ scale: 0 }}
@@ -861,22 +918,42 @@ export default function JoinUsPage() {
                   <CheckCircle size={40} weight="fill" className="text-green-400" />
                 </motion.div>
 
-                <div className="space-y-4">
-                  <h1 className="text-3xl sm:text-4xl font-bold text-white font-[family-name:var(--font-heading)]">
-                    You&apos;re officially signed up.
+                <div className="space-y-4 text-center">
+                  <h1 className="text-3xl sm:text-4xl font-bold text-white font-[family-name:var(--font-heading)] tracking-tight">
+                    You&apos;re in the priority<br />contractor pool.
                   </h1>
                   <p className="text-white/60 text-base max-w-md mx-auto leading-relaxed">
-                    Your details are now in our contractor network, and our team will be in touch
-                    when suitable opportunities become available in your service area.
-                  </p>
-                  <p className="text-white/35 text-sm max-w-md mx-auto leading-relaxed">
-                    We&apos;ll review your details and contact you when there&apos;s a relevant
-                    homeowner enquiry that matches your trade and location.
+                    We&apos;ve added you to our priority pool for{" "}
+                    <span className="text-white font-medium">{form.tradeType || "your trade"}</span>{" "}
+                    in{" "}
+                    <span className="text-white font-medium">{form.locationBasedIn || "your area"}</span>.
+                    We work with a limited number of tradies per area, so when a homeowner enquiry
+                    comes in for your trade and service area, we contact our priority pool first.
                   </p>
                 </div>
 
+                {/* How it works */}
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 max-w-md mx-auto space-y-4">
+                  <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">
+                    How it works
+                  </h3>
+                  <ul className="space-y-3">
+                    {[
+                      "We match new homeowner enquiries by trade and service area.",
+                      "If there’s a fit, we contact you first — usually the same day.",
+                      "We prioritise tradies who respond within 24 hours and deliver the work properly.",
+                      "If the job proceeds, that’s when we get paid. No retainers. No upfront fees.",
+                    ].map((line) => (
+                      <li key={line} className="flex gap-3 text-sm text-white/70 leading-relaxed">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-safety" />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
                 {/* Summary */}
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 text-left space-y-3 max-w-sm mx-auto">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 text-left space-y-3 max-w-md mx-auto">
                   <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Your details</h3>
                   <SummaryRow label="Name" value={form.fullName} />
                   <SummaryRow label="Business" value={form.businessName} />
@@ -884,9 +961,16 @@ export default function JoinUsPage() {
                   <SummaryRow label="Trade" value={form.tradeType} />
                   <SummaryRow label="Based in" value={form.locationBasedIn} />
                   <SummaryRow label="Services" value={form.locationsServiced} />
+                  <SummaryRow label="Capacity" value={form.capacityPerMonth ? `${form.capacityPerMonth} jobs/mo` : ""} />
+                  <SummaryRow label="Job size" value={form.preferredJobSize} />
+                  <SummaryRow label="24h reply" value={form.canRespond24h === "yes" ? "Yes" : form.canRespond24h === "no" ? "No" : ""} />
                   <SummaryRow label="Phone" value={form.phone} />
                   <SummaryRow label="Email" value={form.email} />
                 </div>
+
+                <p className="text-center text-sm text-white/50 max-w-md mx-auto">
+                  If there&apos;s a fit, our team will contact you directly.
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -968,6 +1052,45 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-4 text-sm">
       <span className="text-white/40 shrink-0">{label}</span>
       <span className="text-white font-medium text-right truncate">{value}</span>
+    </div>
+  );
+}
+
+type PillOption = string | { value: string; label: string };
+
+function PillGrid({
+  options,
+  value,
+  onChange,
+  cols = 2,
+}: {
+  options: PillOption[];
+  value: string;
+  onChange: (v: string) => void;
+  cols?: 2 | 3;
+}) {
+  const gridClass = cols === 3 ? "grid-cols-3" : "grid-cols-2";
+  return (
+    <div className={`grid ${gridClass} gap-2.5`}>
+      {options.map((opt) => {
+        const v = typeof opt === "string" ? opt : opt.value;
+        const label = typeof opt === "string" ? opt : opt.label;
+        const selected = value === v;
+        return (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onChange(v)}
+            className={`rounded-xl border px-4 py-4 text-base font-semibold transition-colors min-h-[64px] cursor-pointer ${
+              selected
+                ? "border-orange-safety bg-orange-safety/10 text-white"
+                : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:bg-white/[0.07]"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }
