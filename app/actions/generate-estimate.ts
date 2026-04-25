@@ -257,11 +257,25 @@ ${JSON.stringify(cleanData, null, 2)}
 Calculate a realistic estimate and return ONLY the JSON object.`;
 }
 
+// Verticals that require at least one photo. Defensive server-side guard
+// against UI tampering — the photo step UI already disables Continue, so
+// a legitimate user can't reach this without uploading.
+const PHOTO_REQUIRED: ServiceType[] = ["landscaping", "roofing", "granny-flats"];
+
 // ── Main Server Action ────────────────────────────────────────────────
 export async function generateEstimate(
   request: EstimateRequest
 ): Promise<EstimateResult> {
   try {
+    if (
+      PHOTO_REQUIRED.includes(request.serviceType) &&
+      (!request.images || request.images.length < 1)
+    ) {
+      throw new Error(
+        "At least one photo is required for this service. Please go back and upload a photo.",
+      );
+    }
+
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("GOOGLE_GEMINI_API_KEY is not configured");

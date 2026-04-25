@@ -845,7 +845,7 @@ export default function RoofingEstimator() {
         <div className="space-y-6">
           <StepHeading
             title="Roof Photos"
-            subtitle="Upload at least one photo of your roof for an accurate estimate. (Up to 5)"
+            subtitle="Upload at least one photo of your roof for an accurate estimate. (1–5 required)"
           />
           <input
             ref={fileRef}
@@ -883,6 +883,11 @@ export default function RoofingEstimator() {
                 </div>
               ))}
             </div>
+          )}
+          {form.photos.length === 0 && (
+            <p className="text-xs text-orange-safety">
+              At least one roof photo is required to continue.
+            </p>
           )}
           <div className="flex justify-between">
             <button onClick={goPrev} className={BTN_BACK}>

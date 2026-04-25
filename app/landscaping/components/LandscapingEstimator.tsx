@@ -691,7 +691,7 @@ export default function LandscapingEstimator() {
               Site Photos
             </h3>
             <p className="text-sm text-gray-text">
-              Optional: upload photos of your site so we can factor in slope, access, and existing structures. (Up to 3)
+              Upload at least one site photo so we can factor in slope, access, and existing structures. (1–3 required)
             </p>
           </div>
 
@@ -737,6 +737,12 @@ export default function LandscapingEstimator() {
             )}
           </div>
 
+          {form.photos.length === 0 && (
+            <p className="text-xs text-orange-safety">
+              At least one site photo is required to continue.
+            </p>
+          )}
+
           <div className="flex justify-between">
             <button onClick={() => setStep(4)} className={BTN_BACK}>
               <ArrowLeft size={16} />
@@ -744,9 +750,10 @@ export default function LandscapingEstimator() {
             </button>
             <button
               onClick={() => setStep(6)}
-              className={BTN_NEXT}
+              disabled={form.photos.length === 0}
+              className={`${BTN_NEXT} ${form.photos.length === 0 ? "opacity-40 pointer-events-none" : ""}`}
             >
-              {form.photos.length === 0 ? "Skip for Now" : "Continue"}
+              Continue
               <ArrowRight size={16} />
             </button>
           </div>

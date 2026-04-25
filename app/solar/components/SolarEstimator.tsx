@@ -777,8 +777,8 @@ export default function SolarEstimator() {
             <ArrowLeft size={16} /> Back
           </button>
           <StepHeading
-            title="Optional: Upload photos of your roof"
-            subtitle="Roof photos help refine accuracy for panel placement and shading. You can skip this step."
+            title="Photos (optional)"
+            subtitle="Photos are optional but recommended — they help refine panel placement and shading. You can skip this step."
           />
           <input
             ref={fileRef}

@@ -607,8 +607,8 @@ export default function GrannyFlatEstimator() {
       {currentStepId === "photos" && (
         <div className="space-y-6">
           <StepHeading
-            title="Site Photos"
-            subtitle="Upload up to 5 photos of the block/site for a more accurate estimate."
+            title="Site Photo of the Block"
+            subtitle="Upload at least one photo of the block of land or site so we can assess access, slope, and setbacks. (1–5 required)"
           />
           <input
             ref={fileRef}
@@ -647,12 +647,21 @@ export default function GrannyFlatEstimator() {
               ))}
             </div>
           )}
+          {form.photos.length === 0 && (
+            <p className="text-xs text-orange-safety">
+              At least one photo of the block / site is required to continue.
+            </p>
+          )}
           <div className="flex justify-between">
             <button onClick={goPrev} className={BTN_BACK}>
               <ArrowLeft size={16} /> Back
             </button>
-            <button onClick={goNext} className={BTN_NEXT}>
-              {form.photos.length === 0 ? "Skip" : "Continue"} <ArrowRight size={16} />
+            <button
+              onClick={goNext}
+              disabled={form.photos.length === 0}
+              className={`${BTN_NEXT} ${form.photos.length === 0 ? "opacity-40 pointer-events-none" : ""}`}
+            >
+              Continue <ArrowRight size={16} />
             </button>
           </div>
         </div>
