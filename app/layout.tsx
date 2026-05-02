@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, DM_Sans } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
-import Header from "./components/Header";
+import ChromeShell from "./components/ChromeShell";
 
 const outfit = Outfit({
   variable: "--font-heading",
@@ -38,17 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${outfit.variable} ${dmSans.variable} antialiased`}>
       <body className="min-h-[100dvh] flex flex-col font-sans bg-black-deep text-white">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <footer className="border-t border-gray-light/50 bg-navy-deep py-10">
-          <div className="mx-auto max-w-[1400px] px-6 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-gray-text text-sm">
-            <p>&copy; {new Date().getFullYear()} directbuild</p>
-            <div className="flex gap-6 text-xs">
-              <span>Privacy</span>
-              <span>Terms</span>
-            </div>
-          </div>
-        </footer>
+        <ChromeShell>{children}</ChromeShell>
         {/* Google Ads tag */}
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=AW-17953077407"
