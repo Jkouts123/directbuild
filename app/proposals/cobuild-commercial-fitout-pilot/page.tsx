@@ -10,9 +10,13 @@ const SUMMARY: { label: string; value: string }[] = [
   { label: "Channel", value: "Google Ads" },
   { label: "Focus", value: "Commercial fitouts / design + build enquiries" },
   { label: "DirectBuild fee", value: "$2,500 AUD upfront" },
-  { label: "Recommended ad spend", value: "$50–$80/day, paid directly to Google" },
-  { label: "Success fee", value: "2% of accepted contract value" },
+  {
+    label: "Recommended ad spend",
+    value: "$60/day, paid directly to Google (≈$1,800/month)",
+  },
+  { label: "Success fee", value: "1% of accepted contract value" },
   { label: "Term", value: "30-day pilot, no long-term lock-in" },
+  { label: "Target launch", value: "11 May" },
 ];
 
 const INCLUDED: { item: string; included: string }[] = [
@@ -56,23 +60,25 @@ const INVESTMENT: { item: string; amount: string }[] = [
   },
   {
     item: "Recommended Google Ads spend",
-    amount: "$50–$80/day paid directly to Google",
+    amount: "$60/day paid directly to Google (≈$1,800/month)",
   },
   {
     item: "Success fee",
-    amount: "2% of accepted contract value from DirectBuild-generated leads",
+    amount: "1% of accepted contract value from DirectBuild-generated leads",
   },
   { item: "Term", amount: "30-day pilot, no long-term lock-in" },
 ];
 
 const QUALIFIED = [
-  "Located in Sydney or Cobuild’s service area",
-  "Looking for commercial fitout, office, retail, hospitality, medical, or internal commercial build work",
-  "Early enough that Cobuild can influence scope, design, budget, or buildability",
-  "Has a real project",
-  "Has a realistic timeframe",
-  "Has been screened before handover",
-  "Worth Cobuild reviewing or speaking with",
+  "Commercial fitout or internal commercial works",
+  "Sydney or Cobuild’s service area",
+  "Real project, not casual curiosity",
+  "Minimum estimated project value of $70,000",
+  "Client owns the premises, has the lease signed, or is far enough through the lease process that proceeding is realistic",
+  "Suitable for Cobuild’s current size and capacity",
+  "Not a heavy corporate/procurement-style job with external project managers, excessive paperwork, or tender-style requirements unless Cobuild agrees it is suitable",
+  "Not someone using Cobuild to test whether they should take a lease",
+  "Not purely residential unless agreed otherwise",
 ];
 
 const NOT_QUALIFIED = [
@@ -90,7 +96,7 @@ const PROJECTION_INPUTS: { metric: string; estimate: string }[] = [
   { metric: "Approximate profit margin", estimate: "15%" },
   { metric: "Profit per accepted job", estimate: "$22,500–$45,000" },
   { metric: "Close rate discussed", estimate: "2 from 10 qualified leads" },
-  { metric: "DirectBuild success fee", estimate: "2% of accepted contract value" },
+  { metric: "DirectBuild success fee", estimate: "1% of accepted contract value" },
 ];
 
 const PROJECTION_OUTCOME: {
@@ -101,7 +107,7 @@ const PROJECTION_OUTCOME: {
   { result: "Jobs closed", low: "2", high: "2" },
   { result: "Revenue generated", low: "$300,000", high: "$600,000" },
   { result: "Profit generated at 15%", low: "$45,000", high: "$90,000" },
-  { result: "DirectBuild success fee at 2%", low: "$6,000", high: "$12,000" },
+  { result: "DirectBuild success fee at 1%", low: "$3,000", high: "$6,000" },
 ];
 
 const NEXT_STEPS = [
@@ -250,21 +256,30 @@ export default function CobuildCommercialFitoutPilot() {
               </ul>
             </SoftCard>
           </div>
+
+          <p className="mt-6 text-sm sm:text-[15px] text-slate-700 leading-relaxed">
+            Ideal range starts from $70,000+. Larger opportunities can be
+            assessed case by case based on client type, paperwork, and project
+            complexity.
+          </p>
+
+          <aside className="mt-5 rounded-xl border-l-4 border-orange-safety bg-orange-safety/5 px-5 sm:px-6 py-4">
+            <p className="text-base sm:text-[17px] leading-[1.55] text-slate-900">
+              Commercial fitout leads generated from this campaign are exclusive
+              to Cobuild and will not be sent to other builders.
+            </p>
+          </aside>
         </Section>
 
         {/* ── Section 4: Pilot de-risk ── */}
         <Section number="04" title="Pilot de-risk">
           <SoftCard className="space-y-5">
-            <p className="text-base sm:text-[17px] leading-[1.55] text-slate-700">
-              No signed job can be guaranteed because the final result depends
-              on pricing, quoting speed, timing, availability, and the client’s
-              decision.
-            </p>
             <p className="text-base sm:text-[17px] leading-[1.55] text-slate-900">
               If the campaign does not generate at least 3 qualified commercial
-              fitout/design-build conversations in the first 30 days,
-              DirectBuild will continue campaign management and optimisation
-              for an additional 30 days at no extra management cost.
+              fitout opportunities in the first 30 days, DirectBuild will
+              continue campaign management and optimisation at no extra
+              management fee until those 3 qualified opportunities are
+              delivered.
             </p>
             <p className="text-base sm:text-[17px] leading-[1.55] text-slate-700">
               Cobuild would only continue covering Google ad spend directly.
