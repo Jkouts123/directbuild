@@ -33,7 +33,7 @@ export const LOGOS: LogoEntry[] = [
   },
   {
     name: "SimpliSolar",
-    src: "/logos/joinus/simplisolar.webp",
+    src: "/logos/joinus/simplisolar.png",
     alt: "SimpliSolar",
   },
   {
