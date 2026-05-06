@@ -13,6 +13,9 @@ import {
   RESPONSE_OPTIONS,
 } from "../data";
 import AbnSearch, { type AbnSelected } from "./AbnSearch";
+import OpportunityReport, {
+  type AreaOpportunityReport,
+} from "./OpportunityReport";
 
 interface FormState {
   full_name: string;
@@ -69,6 +72,9 @@ export default function EligibilityForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [report, setReport] = useState<AreaOpportunityReport | null>(null);
+  const [reportError, setReportError] = useState("");
+  const [generatingReport, setGeneratingReport] = useState(false);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((p) => ({ ...p, [key]: value }));
@@ -203,16 +209,60 @@ export default function EligibilityForm({
     }
   }
 
+  async function generateReport() {
+    setGeneratingReport(true);
+    setReport(null);
+    setReportError("");
+
+    try {
+      const res = await fetch("/api/joinus/generate-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: form.full_name,
+          business_name: form.business_name,
+          abn: abn ? abn.abn.replace(/\s/g, "") : "",
+          trade_type: form.trade_type,
+          service_area: form.service_area,
+          website: normaliseUrl(form.website),
+          average_job_value: form.average_job_value,
+          capacity_per_month: form.capacity_per_month,
+          can_respond_24h: form.can_respond_24h,
+          current_marketing_issue: form.current_marketing_issue,
+          phone: form.phone,
+          email: form.email,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        status?: string;
+        report?: AreaOpportunityReport;
+      };
+
+      if (!res.ok || json.status !== "success" || !json.report) {
+        throw new Error("Report generation unavailable");
+      }
+
+      setReport(json.report);
+    } catch (err) {
+      console.error("[joinus] report generation error:", err);
+      setReportError("Report unavailable");
+    } finally {
+      setGeneratingReport(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setError("");
     setSubmitting(true);
+    const reportPromise = generateReport();
     try {
-      if (submitMode === "live") {
-        await submitLive();
-      } else {
-        await submitSandbox();
+      const [submitResult] = await Promise.allSettled([
+        submitMode === "live" ? submitLive() : submitSandbox(),
+      ]);
+      if (submitResult.status === "rejected") {
+        throw submitResult.reason;
       }
       setSubmitted(true);
     } catch (err) {
@@ -223,12 +273,19 @@ export default function EligibilityForm({
           : "Network error. Please check your connection and try again.",
       );
     } finally {
+      void reportPromise;
       setSubmitting(false);
     }
   }
 
   if (submitted) {
-    return <SuccessState />;
+    return (
+      <SuccessState
+        report={report}
+        reportError={reportError}
+        generatingReport={generatingReport}
+      />
+    );
   }
 
   return (
@@ -516,7 +573,9 @@ export default function EligibilityForm({
                   </>
                 ) : (
                   <>
-                    Submit application{" "}
+                    {canSubmit
+                      ? "Generate report & submit application"
+                      : "Submit application"}{" "}
                     <ArrowRight size={18} strokeWidth={2.25} />
                   </>
                 )}
@@ -580,7 +639,15 @@ function PillGroup({
   );
 }
 
-function SuccessState() {
+function SuccessState({
+  report,
+  reportError,
+  generatingReport,
+}: {
+  report: AreaOpportunityReport | null;
+  reportError: string;
+  generatingReport: boolean;
+}) {
   return (
     <section
       id="apply"
@@ -596,28 +663,36 @@ function SuccessState() {
         />
       </div>
 
-      <div className="mx-auto max-w-[640px] px-5 sm:px-8 lg:px-12 text-center space-y-6 sm:space-y-7">
-        <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full border border-orange-safety/30 bg-orange-safety/10">
-          <CheckCircle2
-            size={28}
-            strokeWidth={1.75}
-            className="text-orange-safety"
-          />
+      <div className="mx-auto max-w-[860px] px-5 sm:px-8 lg:px-12">
+        <div className="mx-auto max-w-[640px] text-center space-y-6 sm:space-y-7">
+          <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full border border-orange-safety/30 bg-orange-safety/10">
+            <CheckCircle2
+              size={28}
+              strokeWidth={1.75}
+              className="text-orange-safety"
+            />
+          </div>
+          <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-orange-safety">
+            Application received
+          </p>
+          <h2 className="text-3xl sm:text-5xl font-bold tracking-[-0.03em] leading-[1.05]">
+            Application received.
+          </h2>
+          <p className="text-base sm:text-lg text-white/65 leading-[1.6] max-w-[52ch] mx-auto">
+            Verified applications are reviewed by trade and service area. If
+            there’s a fit for the current DirectBuild intake, we’ll contact
+            you about next steps.
+          </p>
+          <p className="text-xs text-white/40 pt-2">
+            Selected trades only · limited spots per area.
+          </p>
         </div>
-        <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-orange-safety">
-          Application received
-        </p>
-        <h2 className="text-3xl sm:text-5xl font-bold tracking-[-0.03em] leading-[1.05]">
-          Application received.
-        </h2>
-        <p className="text-base sm:text-lg text-white/65 leading-[1.6] max-w-[52ch] mx-auto">
-          Verified applications are reviewed by trade and service area. If
-          there’s a fit for the current DirectBuild intake, we’ll contact
-          you about next steps.
-        </p>
-        <p className="text-xs text-white/40 pt-2">
-          Selected trades only · limited spots per area.
-        </p>
+
+        <OpportunityReport
+          report={report}
+          loading={generatingReport}
+          error={reportError}
+        />
       </div>
     </section>
   );
