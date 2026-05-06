@@ -22,9 +22,18 @@ function collectDatFiles(targetPath: string): string[] {
   if (!stats.isDirectory()) return [];
 
   return fs
-    .readdirSync(targetPath)
-    .filter((entry) => entry.toLowerCase().endsWith(".dat"))
-    .map((entry) => path.join(targetPath, entry));
+    .readdirSync(targetPath, { withFileTypes: true })
+    .flatMap((entry) => {
+      const entryPath = path.join(targetPath, entry.name);
+
+      if (entry.isDirectory()) return collectDatFiles(entryPath);
+      if (entry.isFile() && entry.name.toLowerCase().endsWith(".dat")) {
+        return [entryPath];
+      }
+
+      return [];
+    })
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function formatCurrency(value: number | null) {
@@ -50,6 +59,18 @@ function describeSale(row: NswPsiSaleRow) {
     purchasePrice: formatCurrency(row.purchasePrice || null),
     zoneCode: row.zoneCode || "",
     primaryPurpose: row.primaryPurpose || "",
+  };
+}
+
+function getDateRange(rows: NswPsiSaleRow[]) {
+  const validDates = rows
+    .map((row) => row.contractDate)
+    .filter((date): date is string => Boolean(date))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    earliestSaleDate: validDates[0] || null,
+    latestSaleDate: validDates[validDates.length - 1] || null,
   };
 }
 
@@ -83,20 +104,23 @@ function main() {
   const matchedRows = rows.filter(
     (row) => (row.suburb || "").trim().toUpperCase() === serviceArea,
   );
+  const { earliestSaleDate, latestSaleDate } = getDateRange(matchedRows);
 
   console.log("NSW Valuer General PSI parser test");
   console.log("----------------------------------");
   console.log(`Input path: ${resolvedPath}`);
-  console.log(`DAT files parsed: ${datFiles.length}`);
+  console.log(`DAT files processed: ${datFiles.length}`);
   console.log(`Service area: ${serviceArea}`);
-  console.log(`Parsed rows: ${rows.length}`);
+  console.log(`Total parsed rows: ${rows.length}`);
   console.log(`Matched suburb rows: ${matchedRows.length}`);
   console.log(`Recent sales count: ${aggregate.matchedSalesCount}`);
   console.log(`Median sale price: ${formatCurrency(aggregate.medianSalePrice)}`);
   console.log(`Property turnover signal: ${aggregate.propertyTurnoverSignal}`);
+  console.log(`Earliest sale date: ${earliestSaleDate || "null"}`);
+  console.log(`Latest sale date: ${latestSaleDate || "null"}`);
   console.log("");
-  console.log("First 3 matched examples:");
-  console.log(JSON.stringify(matchedRows.slice(0, 3).map(describeSale), null, 2));
+  console.log("First 5 matched examples:");
+  console.log(JSON.stringify(matchedRows.slice(0, 5).map(describeSale), null, 2));
 }
 
 main();
