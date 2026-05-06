@@ -1,4 +1,4 @@
-// Sandbox-only content for /sandbox/joinus.
+// Shared content for /joinus (live) and /sandbox/joinus (preview).
 // Pure data. No imports. Easy to tweak copy without touching components.
 
 export type LogoEntry =
@@ -31,9 +31,16 @@ export const LOGOS: LogoEntry[] = [
     src: "/logos/joinus/innovative-landscapes.jpg",
     alt: "Innovative Landscapes",
   },
-  // PDF-only assets — render as wordmark until usable raster is provided.
-  { name: "SimpliSolar", wordmark: true },
-  { name: "Ferguson’s Landscapes", wordmark: true },
+  {
+    name: "SimpliSolar",
+    src: "/logos/joinus/simplisolar.webp",
+    alt: "SimpliSolar",
+  },
+  {
+    name: "Ferguson’s Landscapes",
+    src: "/logos/joinus/fergusons-landscapes.png",
+    alt: "Ferguson’s Landscapes",
+  },
 ];
 
 export const PROOF_STATS: { label: string; value: string }[] = [

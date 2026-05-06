@@ -5,7 +5,6 @@ import { ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import PhoneVerify from "../../components/PhoneVerify";
 import { trackFacebookLead } from "../../components/FacebookPixel";
 import { sendJoinUsCapi } from "../../actions/joinus-capi";
-import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
 import { generateTradieId } from "@/lib/utils/ids";
 import {
   TRADE_OPTIONS,
@@ -48,6 +47,7 @@ const INPUT =
 
 const LABEL = "block text-sm font-medium text-white/85 mb-2";
 const HINT = "text-xs text-white/45 mt-1.5";
+const OTP_REQUIRED = true;
 
 function normaliseUrl(url: string): string {
   const trimmed = url.trim();
@@ -64,7 +64,7 @@ export default function EligibilityForm({
 }: EligibilityFormProps) {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [abn, setAbn] = useState<AbnSelected | null>(null);
-  const [verified, setVerified] = useState(!OTP_VERIFICATION_ENABLED);
+  const [verified, setVerified] = useState(!OTP_REQUIRED);
   const [showOTP, setShowOTP] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -72,7 +72,7 @@ export default function EligibilityForm({
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((p) => ({ ...p, [key]: value }));
-    if (key === "phone" && OTP_VERIFICATION_ENABLED) {
+    if (key === "phone" && OTP_REQUIRED) {
       setVerified(false);
     }
   }
@@ -464,7 +464,7 @@ export default function EligibilityForm({
                   placeholder="04XX XXX XXX"
                   className={`${INPUT} sm:flex-1`}
                 />
-                {OTP_VERIFICATION_ENABLED && !verified && (
+                {OTP_REQUIRED && !verified && (
                   <button
                     type="button"
                     onClick={handleVerifyClick}
@@ -477,14 +477,14 @@ export default function EligibilityForm({
                     Verify via SMS
                   </button>
                 )}
-                {OTP_VERIFICATION_ENABLED && verified && (
+                {OTP_REQUIRED && verified && (
                   <span className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-5 min-h-[52px] text-sm font-semibold text-emerald-300 whitespace-nowrap">
                     <CheckCircle2 size={16} strokeWidth={2} />
                     Phone verified
                   </span>
                 )}
               </div>
-              {OTP_VERIFICATION_ENABLED && (
+              {OTP_REQUIRED && (
                 <p className={HINT}>
                   We send a 6-digit code by SMS. Verification is required
                   before submitting.
@@ -526,7 +526,7 @@ export default function EligibilityForm({
         </div>
       </section>
 
-      {showOTP && OTP_VERIFICATION_ENABLED && (
+      {showOTP && OTP_REQUIRED && (
         <PhoneVerify
           phone={form.phone}
           onVerified={handleVerified}
