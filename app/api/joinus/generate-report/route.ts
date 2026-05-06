@@ -17,6 +17,10 @@ type ReportRequestBody = {
   can_respond_24h?: unknown;
   website?: unknown;
   current_marketing_issue?: unknown;
+  gross_margin_range?: unknown;
+  current_marketing_spend?: unknown;
+  preferred_job_types?: unknown;
+  current_lead_sources?: unknown;
 };
 
 function asString(value: unknown) {
@@ -26,6 +30,170 @@ function asString(value: unknown) {
 function asStringOrBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   return asString(value);
+}
+
+function asStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function parseMoneyRange(value: string) {
+  const lower = value.toLowerCase();
+  const numbers = value
+    .match(/\d[\d,]*/g)
+    ?.map((part) => Number(part.replace(/,/g, "")))
+    .filter((number) => Number.isFinite(number));
+
+  if (!numbers || numbers.length === 0) return null;
+  if (lower.includes("under")) return { min: 0, max: numbers[0] };
+  if (lower.includes("+")) return { min: numbers[0], max: null };
+  if (numbers.length === 1) return { min: numbers[0], max: numbers[0] };
+
+  return { min: numbers[0], max: numbers[1] };
+}
+
+function parseCapacityRange(value: string) {
+  const numbers = value
+    .match(/\d+/g)
+    ?.map(Number)
+    .filter((number) => Number.isFinite(number));
+
+  if (!numbers || numbers.length === 0) return null;
+  if (value.includes("+")) return { min: numbers[0], max: null };
+  if (numbers.length === 1) return { min: numbers[0], max: numbers[0] };
+
+  return { min: numbers[0], max: numbers[1] };
+}
+
+function parsePercent(value: string) {
+  const match = value.match(/\d+(\.\d+)?/);
+  if (!match) return null;
+
+  const percent = Number(match[0]);
+  if (!Number.isFinite(percent) || percent <= 0) return null;
+
+  return percent / 100;
+}
+
+function parseMarginRange(value: string) {
+  const lower = value.toLowerCase();
+  if (!value || lower.includes("not sure")) return null;
+
+  const numbers = value.match(/\d+(\.\d+)?/g)?.map(Number);
+  if (!numbers || numbers.length === 0) return null;
+  if (lower.includes("under")) return { min: 0, max: numbers[0] / 100 };
+  if (lower.includes("+")) return { min: numbers[0] / 100, max: null };
+  if (numbers.length === 1) return { min: numbers[0] / 100, max: numbers[0] / 100 };
+
+  return { min: numbers[0] / 100, max: numbers[1] / 100 };
+}
+
+function formatNumberRange(min: number, max: number | null, suffix = "") {
+  const minRounded = Math.ceil(min);
+  if (max === null) return `${minRounded}+${suffix}`;
+
+  const maxRounded = Math.ceil(max);
+  if (minRounded === maxRounded) return `${minRounded}${suffix}`;
+  return `${minRounded}–${maxRounded}${suffix}`;
+}
+
+function formatMoneyRange(min: number, max: number | null) {
+  if (max === null) return `${formatCurrency(min)}+`;
+  if (Math.round(min) === Math.round(max)) return formatCurrency(min);
+  return `${formatCurrency(min)}–${formatCurrency(max)}`;
+}
+
+function calculateCommercialScenario(input: {
+  score: number;
+  capacityPerMonth: string;
+  averageJobValue: string;
+  closeRate: string;
+  grossMarginRange: string;
+}) {
+  const capacity = parseCapacityRange(input.capacityPerMonth);
+  const jobValue = parseMoneyRange(input.averageJobValue);
+  const closeRate = parsePercent(input.closeRate);
+  const margin = parseMarginRange(input.grossMarginRange);
+
+  const targetExtraJobs = capacity
+    ? formatNumberRange(capacity.min, capacity.max, " jobs/month")
+    : "Capacity input needed";
+  const requiredQualifiedEnquiries =
+    capacity && closeRate
+      ? formatNumberRange(
+          capacity.min / closeRate,
+          capacity.max === null ? null : capacity.max / closeRate,
+          " enquiries/month",
+        )
+      : "Close-rate input needed";
+  const projectedBookedRevenueRange =
+    capacity && jobValue
+      ? formatMoneyRange(
+          capacity.min * jobValue.min,
+          capacity.max === null || jobValue.max === null
+            ? null
+            : capacity.max * jobValue.max,
+        )
+      : "Job value and capacity inputs needed";
+  const estimatedGrossProfitRange =
+    capacity && jobValue && margin
+      ? formatMoneyRange(
+          capacity.min * jobValue.min * margin.min,
+          capacity.max === null || jobValue.max === null || margin.max === null
+            ? null
+            : capacity.max * jobValue.max * margin.max,
+        )
+      : null;
+
+  const jobValueForWallet = jobValue
+    ? jobValue.max === null
+      ? jobValue.min
+      : (jobValue.min + jobValue.max) / 2
+    : null;
+  const baseWallet =
+    jobValueForWallet === null
+      ? null
+      : jobValueForWallet < 7500
+        ? { min: 750, max: 1500 }
+        : jobValueForWallet < 15000
+          ? { min: 1500, max: 3000 }
+          : jobValueForWallet < 30000
+            ? { min: 2500, max: 5000 }
+            : { min: 4000, max: 8000 };
+  const enquiryMin = capacity && closeRate ? capacity.min / closeRate : null;
+  const walletMultiplier =
+    enquiryMin === null ? 1 : enquiryMin >= 20 ? 1.5 : enquiryMin >= 10 ? 1.25 : 1;
+  const estimatedAdWalletRange = baseWallet
+    ? formatMoneyRange(baseWallet.min * walletMultiplier, baseWallet.max * walletMultiplier)
+    : "Average job value input needed";
+  const recommendedActivationLevel =
+    input.score >= 75
+      ? "Priority measured activation"
+      : input.score >= 58
+        ? "Controlled test activation"
+        : input.score >= 40
+          ? "Manual review before activation"
+          : "Improve inputs before activation";
+
+  return {
+    targetExtraJobs,
+    requiredQualifiedEnquiries,
+    projectedBookedRevenueRange,
+    estimatedAdWalletRange,
+    estimatedGrossProfitRange,
+    recommendedActivationLevel,
+  };
 }
 
 function errorResponse(message: string, status = 400) {
@@ -132,6 +300,17 @@ export async function POST(request: Request) {
       closeRate: asString(body.close_rate),
       canRespond24h: asStringOrBoolean(body.can_respond_24h),
       currentMarketingIssue: asString(body.current_marketing_issue),
+      grossMarginRange: asString(body.gross_margin_range),
+      currentMarketingSpend: asString(body.current_marketing_spend),
+      preferredJobTypes: asStringArray(body.preferred_job_types),
+      currentLeadSources: asStringArray(body.current_lead_sources),
+    });
+    const scenario = calculateCommercialScenario({
+      score: score.score,
+      capacityPerMonth: asString(body.capacity_per_month),
+      averageJobValue: asString(body.average_job_value),
+      closeRate: asString(body.close_rate),
+      grossMarginRange: asString(body.gross_margin_range),
     });
 
     return Response.json({
@@ -142,6 +321,7 @@ export async function POST(request: Request) {
         trade,
         serviceArea,
         scoreBreakdown: score.scoreBreakdown,
+        ...scenario,
         signals: {
           competitors: competitorResult,
           planning: planningResult,

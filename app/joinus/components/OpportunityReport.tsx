@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 export type AreaOpportunityReport = {
@@ -7,6 +8,12 @@ export type AreaOpportunityReport = {
   fitLabel: string;
   trade: string;
   serviceArea: string;
+  targetExtraJobs?: string;
+  requiredQualifiedEnquiries?: string;
+  projectedBookedRevenueRange?: string;
+  estimatedAdWalletRange?: string;
+  estimatedGrossProfitRange?: string | null;
+  recommendedActivationLevel?: string;
   scoreBreakdown: {
     competitorGap?: number;
     planningSignal?: number;
@@ -30,6 +37,14 @@ type OpportunityReportProps = {
   error: string;
 };
 
+const LOADING_STEPS = [
+  "Analysing service area",
+  "Checking visible competitors",
+  "Reviewing job economics",
+  "Calculating pipeline scenario",
+  "Preparing DirectBuild report",
+];
+
 export default function OpportunityReport({
   report,
   loading,
@@ -38,18 +53,7 @@ export default function OpportunityReport({
   if (loading) {
     return (
       <ReportShell>
-        <div className="flex flex-col items-center gap-4 py-4 text-center">
-          <Loader2 size={28} className="animate-spin text-orange-safety" />
-          <div className="space-y-2">
-            <h3 className="text-xl sm:text-2xl font-bold tracking-[-0.02em]">
-              Building your Area Opportunity Report
-            </h3>
-            <p className="text-sm sm:text-base text-white/60 leading-relaxed max-w-[52ch]">
-              We’re checking competitor visibility and local planning signals.
-              Your application has already been received.
-            </p>
-          </div>
-        </div>
+        <ReportLoading />
       </ReportShell>
     );
   }
@@ -74,70 +78,68 @@ export default function OpportunityReport({
     );
   }
 
-  const breakdown = [
-    ["Competitor gap", report.scoreBreakdown.competitorGap],
-    ["Planning signal", report.scoreBreakdown.planningSignal],
-    ["Economics", report.scoreBreakdown.businessEconomics],
-    ["Readiness", report.scoreBreakdown.capacityReadiness],
-  ].filter((item): item is [string, number] => typeof item[1] === "number");
+  const topCards = [
+    ["Opportunity score", `${report.score}/100`],
+    ["Target extra jobs/month", report.targetExtraJobs],
+    ["Required qualified enquiries/month", report.requiredQualifiedEnquiries],
+    ["Projected booked revenue", report.projectedBookedRevenueRange],
+    ["Estimated ad wallet", report.estimatedAdWalletRange],
+    ["Estimated gross profit", report.estimatedGrossProfitRange || undefined],
+  ].filter((item): item is [string, string] => typeof item[1] === "string");
 
   return (
     <ReportShell>
-      <div className="space-y-8 text-left">
-        <header className="space-y-4 text-center">
+      <div className="space-y-7 text-left">
+        <header className="space-y-3 text-center">
           <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-orange-safety">
             Area Opportunity Report
           </p>
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-orange-safety/40 bg-orange-safety/10">
-              <span className="text-4xl font-bold tracking-[-0.04em] text-white">
-                {report.score}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-2xl sm:text-3xl font-bold tracking-[-0.03em]">
-                {report.fitLabel}
-              </h3>
-              <p className="text-sm text-white/50">
-                {report.trade} · {report.serviceArea}
-              </p>
-            </div>
-          </div>
-          <p className="mx-auto max-w-[58ch] text-sm sm:text-base text-white/65 leading-relaxed">
-            {report.copy.areaSummary}
+          <h3 className="text-2xl sm:text-3xl font-bold tracking-[-0.03em]">
+            {report.fitLabel}
+          </h3>
+          <p className="text-sm text-white/50">
+            {report.trade} · {report.serviceArea}
           </p>
         </header>
 
-        {breakdown.length > 0 && (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {breakdown.map(([label, value]) => (
+        {topCards.length > 0 && (
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {topCards.map(([label, value]) => (
               <div
                 key={label}
-                className="rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3 text-center"
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-4"
               >
-                <p className="text-lg font-bold text-white">{value}</p>
-                <p className="mt-1 text-[10px] font-mono uppercase tracking-[0.14em] text-white/45">
+                <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-white/45">
                   {label}
+                </p>
+                <p className="mt-2 text-xl font-bold tracking-[-0.02em] text-white">
+                  {value}
                 </p>
               </div>
             ))}
           </div>
         )}
 
-        <div className="space-y-5">
-          <ReportSection title="Competitor Visibility">
+        <p className="rounded-lg border border-orange-safety/20 bg-orange-safety/10 px-4 py-3 text-sm leading-relaxed text-white/72">
+          This is the level of ad wallet likely needed to test whether the area
+          can produce enough qualified enquiries. It is not a guaranteed cost
+          per result.
+        </p>
+
+        <div className="grid gap-4">
+          <ReportSection title="What this means">
+            {report.copy.areaSummary}
+          </ReportSection>
+          <ReportSection title="Competitor visibility">
             {report.copy.competitorSummary}
           </ReportSection>
-          <ReportSection title="Planning Activity">
+          <ReportSection title="Planning data status">
             {report.copy.planningSummary}
           </ReportSection>
-          <ReportSection title="Commercial Scenario">
-            {report.copy.revenueScenario}
-          </ReportSection>
-          <ReportSection title="Pipeline Risk">
+          <ReportSection title="Pipeline risk">
             {report.copy.pipelineRisk}
           </ReportSection>
-          <ReportSection title="Recommended Next Step">
+          <ReportSection title="Recommended next step">
             {report.copy.recommendedNextStep}
           </ReportSection>
         </div>
@@ -157,6 +159,46 @@ export default function OpportunityReport({
   );
 }
 
+function ReportLoading() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setStep((current) => Math.min(current + 1, LOADING_STEPS.length - 1));
+    }, 600);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center gap-5 py-4 text-center">
+      <Loader2 size={28} className="animate-spin text-orange-safety" />
+      <div className="space-y-2">
+        <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-orange-safety">
+          Preparing report
+        </p>
+        <h3 className="text-xl sm:text-2xl font-bold tracking-[-0.02em]">
+          {LOADING_STEPS[step]}
+        </h3>
+        <p className="text-sm sm:text-base text-white/60 leading-relaxed max-w-[52ch]">
+          Your application has been received. We’re assembling a cautious
+          commercial scenario from the available signals.
+        </p>
+      </div>
+      <div className="grid w-full max-w-md grid-cols-5 gap-1.5">
+        {LOADING_STEPS.map((item, index) => (
+          <span
+            key={item}
+            className={`h-1 rounded-full ${
+              index <= step ? "bg-orange-safety" : "bg-white/12"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ReportShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.035] p-5 sm:p-8 lg:p-10">
@@ -173,7 +215,7 @@ function ReportSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-2">
+    <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
       <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
         {title}
       </h4>

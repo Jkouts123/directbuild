@@ -15,6 +15,10 @@ type ReportCopyInput = {
   closeRate?: string;
   canRespond24h?: string | boolean;
   currentMarketingIssue?: string;
+  grossMarginRange?: string;
+  currentMarketingSpend?: string;
+  preferredJobTypes?: string[];
+  currentLeadSources?: string[];
 };
 
 export type ReportCopyResult = {
@@ -50,27 +54,27 @@ function formatCapacity(value?: string) {
 
 function buildCompetitorSummary(input: ReportCopyInput) {
   if (input.competitorStatus !== "success") {
-    return `Competitor visibility for ${input.serviceArea} is pending because the Google Places scan returned ${input.competitorStatus}. The report can still be reviewed, but this signal should be refreshed before making a spend or capacity decision.`;
+    return "Competitor scan pending. This report can still be reviewed, but market visibility should be refreshed before activation.";
   }
 
-  return `Google Places shows ${input.competitorCount} visible ${input.trade} competitor${
+  return `Visible competitor set: ${input.competitorCount} ${input.trade} competitor${
     input.competitorCount === 1 ? "" : "s"
-  } around ${input.serviceArea}, with an average rating of ${formatMaybeNumber(
+  } around ${input.serviceArea}. Avg rating: ${formatMaybeNumber(
     input.averageRating,
-    "not available",
-  )} and average review depth of ${formatMaybeNumber(
+    "n/a",
+  )}. Avg review depth: ${formatMaybeNumber(
     input.averageReviewCount,
-    "not available",
-  )}. This is a market visibility signal: it indicates how crowded the visible search surface is, not guaranteed homeowner demand.`;
+    "n/a",
+  )}. This is a market visibility signal, not a demand guarantee.`;
 }
 
 function buildPlanningSummary(input: ReportCopyInput) {
   if (input.planningStatus === "error") {
-    return "NSW Planning activity data is unavailable/pending access for this report. Treat the planning layer as incomplete rather than weak demand; it should be refreshed once DA data access is resolved.";
+    return "Planning activity data is unavailable/pending access for this report. Treat the planning layer as incomplete rather than weak demand.";
   }
 
   if (input.planningStatus === "no_results") {
-    return "The NSW Planning scan did not find matching recent applications for the supplied area and trade keywords. This is a limited planning-activity signal, not evidence that homeowner demand is absent.";
+    return "No matching recent planning applications were found from the available scan. Treat this as limited planning context, not evidence of low homeowner demand.";
   }
 
   const keywordText =
@@ -78,9 +82,9 @@ function buildPlanningSummary(input: ReportCopyInput) {
       ? ` Top matched keywords included ${input.topMatchedKeywords.join(", ")}.`
       : "";
 
-  return `NSW Planning returned ${input.relevantApplicationCount} relevant recent planning application signal${
+  return `Planning scan: ${input.relevantApplicationCount} relevant recent application signal${
     input.relevantApplicationCount === 1 ? "" : "s"
-  } for this trade and area.${keywordText} Treat this as supporting context, not a forecast.`;
+  }.${keywordText} Supporting context only, not a forecast.`;
 }
 
 function buildRevenueScenario(input: ReportCopyInput) {
@@ -101,47 +105,43 @@ function buildRevenueScenario(input: ReportCopyInput) {
     return "A commercial scenario needs job value, capacity, and close-rate inputs before it should be quantified. DirectBuild would treat those as planning assumptions, not forecast revenue.";
   }
 
-  return `Commercial scenario: using the supplied ${parts.join(
+  return `Based on ${parts.join(
     " and ",
-  )}, DirectBuild can model a cautious pipeline view. The scenario should be validated against enquiry quality, follow-up speed, quote conversion, and booked-job outcomes.`;
+  )}. Use the cards above as a test scenario, then validate against enquiry quality, follow-up speed, quote conversion, and booked jobs.`;
 }
 
 function buildPipelineRisk(input: ReportCopyInput) {
-  const risks = [];
+  const improvementArea = input.currentMarketingIssue?.trim();
+
+  if (improvementArea) {
+    return `Your first improvement area is ${improvementArea.toLowerCase()}. DirectBuild should focus on qualification, follow-up, quote tracking, and outcome visibility before scaling ad spend.`;
+  }
 
   if (!isYes(input.canRespond24h)) {
-    risks.push("response speed may reduce conversion if new enquiries are not followed up within 24 hours");
+    return "Response speed is the first operational risk. DirectBuild should tighten qualification and follow-up before increasing enquiry volume.";
   }
-  if (input.currentMarketingIssue?.trim()) {
-    risks.push(`the stated marketing constraint is: ${input.currentMarketingIssue.trim()}`);
-  }
+
   if (!input.capacityPerMonth) {
-    risks.push("available monthly capacity has not been supplied");
+    return "Capacity is not yet clear. DirectBuild should confirm available monthly slots before testing paid acquisition.";
   }
 
-  if (risks.length === 0) {
-    return "Primary pipeline risk is execution quality. Search visibility only becomes commercial value when enquiries are qualified, followed up quickly, quoted clearly, and tracked through to booked work.";
-  }
-
-  return `Pipeline risks: ${risks.join(
-    "; ",
-  )}. DirectBuild should reduce leakage through qualification, follow-up discipline, quote tracking, and booked-job visibility.`;
+  return "Primary pipeline risk is execution quality. Visibility only becomes commercial value when enquiries are qualified, followed up, quoted, and tracked through to booked work.";
 }
 
 export function buildReportCopy(input: ReportCopyInput): ReportCopyResult {
   return {
-    areaSummary: `${input.serviceArea} is currently assessed as a ${input.fitLabel.toLowerCase()} for ${input.trade}, with an opportunity score of ${input.score}/100. This is a directional read from the available visibility, planning, and business-readiness signals.`,
+    areaSummary: `${input.serviceArea} is assessed as a ${input.fitLabel.toLowerCase()} for ${input.trade}. Score: ${input.score}/100, based on supplied business inputs and available market signals.`,
     competitorSummary: buildCompetitorSummary(input),
     planningSummary: buildPlanningSummary(input),
     revenueScenario: buildRevenueScenario(input),
     pipelineRisk: buildPipelineRisk(input),
     recommendedNextStep:
-      "Recommended next step: review the signal quality with DirectBuild, confirm service-area coverage and job economics, then run a measured intake where enquiries are qualified, followed up, quoted, and tracked through to booked-job visibility.",
+      "Confirm the job mix, economics, and service-area coverage. Then run a measured DirectBuild activation with qualification, follow-up, quote tracking, and booked-job visibility in place.",
     disclaimers: [
-      "This report uses signals and supplied assumptions; it is not a guarantee of demand, leads, revenue, or booked work.",
-      "Competitor visibility from Google Places is a market presence signal, not a complete market-size estimate.",
-      "Planning activity may be incomplete or unavailable depending on NSW Planning open-data access and council reporting coverage.",
-      "Revenue scenarios should be validated against actual enquiry quality, quote rate, close rate, and job value.",
+      "Scenario only, based on supplied inputs and available signals.",
+      "Not a guarantee of demand, lead volume, revenue, profit, or booked work.",
+      "Competitor visibility is a market presence signal, not a full market-size estimate.",
+      "Ad wallet estimates are subject to campaign testing and actual enquiry quality.",
     ],
   };
 }

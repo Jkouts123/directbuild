@@ -25,8 +25,13 @@ interface FormState {
   website: string;
   average_job_value: string;
   capacity_per_month: string;
+  close_rate: string;
   can_respond_24h: string;
   current_marketing_issue: string;
+  gross_margin_range: string;
+  current_marketing_spend: string;
+  preferred_job_types: string[];
+  current_lead_sources: string[];
   phone: string;
   email: string;
 }
@@ -39,8 +44,13 @@ const INITIAL: FormState = {
   website: "",
   average_job_value: "",
   capacity_per_month: "",
+  close_rate: "",
   can_respond_24h: "",
   current_marketing_issue: "",
+  gross_margin_range: "",
+  current_marketing_spend: "",
+  preferred_job_types: [],
+  current_lead_sources: [],
   phone: "",
   email: "",
 };
@@ -51,11 +61,120 @@ const INPUT =
 const LABEL = "block text-sm font-medium text-white/85 mb-2";
 const HINT = "text-xs text-white/45 mt-1.5";
 const OTP_REQUIRED = true;
+const MIN_REPORT_LOADING_MS = 3000;
+
+const CLOSE_RATE_OPTIONS = ["Under 15%", "15–25%", "25–40%", "40%+", "Not sure"];
+const GROSS_MARGIN_OPTIONS = [
+  "Under 15%",
+  "15–25%",
+  "25–40%",
+  "40%+",
+  "Not sure",
+];
+const MARKETING_SPEND_OPTIONS = [
+  "$0",
+  "Under $1,000/month",
+  "$1,000–$3,000/month",
+  "$3,000–$7,500/month",
+  "$7,500+/month",
+];
+const LEAD_SOURCE_OPTIONS = [
+  "Referrals",
+  "Google",
+  "Facebook / Instagram",
+  "Website",
+  "Hipages / lead platforms",
+  "Agency",
+  "Repeat clients",
+  "Word of mouth",
+  "Other",
+];
+const IMPROVEMENT_OPTIONS = [
+  "More private homeowner enquiries",
+  "Better quality enquiries",
+  "Faster follow-up with homeowners",
+  "More quote-ready opportunities",
+  "Better visibility on what marketing turns into jobs",
+  "Less reliance on referrals",
+  "Less reliance on agencies or lead platforms",
+  "Better tracking from enquiry to booked job",
+];
+const JOB_TYPE_OPTIONS = {
+  landscaping: [
+    "Full backyard upgrades",
+    "Retaining walls",
+    "Paving",
+    "Turf",
+    "Outdoor entertaining",
+    "Pool surrounds",
+    "Front yard transformations",
+  ],
+  carpentry: [
+    "Decks",
+    "Pergolas",
+    "Renovation carpentry",
+    "Framing",
+    "Fit-outs",
+    "Doors / windows",
+    "High-end custom work",
+  ],
+  roofing: [
+    "Roof repairs",
+    "Re-roofing",
+    "Leak repair",
+    "Guttering",
+    "Storm damage",
+    "Roof restoration",
+  ],
+  solar: [
+    "Residential solar installs",
+    "Battery installs",
+    "Solar upgrades",
+    "Inverter replacements",
+    "Commercial solar",
+  ],
+  builders: [
+    "Extensions",
+    "Renovations",
+    "Granny flats",
+    "Garage conversions",
+    "Outdoor structures",
+    "High-end residential work",
+  ],
+  generic: [
+    "Higher-value residential jobs",
+    "Maintenance / repair work",
+    "New installs",
+    "Renovation work",
+    "Emergency / urgent work",
+    "Larger project work",
+  ],
+};
 
 function normaliseUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) return "";
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getPreferredJobOptions(trade: string) {
+  const value = trade.toLowerCase();
+  if (value.includes("landscap")) return JOB_TYPE_OPTIONS.landscaping;
+  if (value.includes("carpent")) return JOB_TYPE_OPTIONS.carpentry;
+  if (value.includes("roof")) return JOB_TYPE_OPTIONS.roofing;
+  if (value.includes("solar")) return JOB_TYPE_OPTIONS.solar;
+  if (
+    value.includes("build") ||
+    value.includes("renovat") ||
+    value.includes("granny")
+  ) {
+    return JOB_TYPE_OPTIONS.builders;
+  }
+  return JOB_TYPE_OPTIONS.generic;
 }
 
 interface EligibilityFormProps {
@@ -77,10 +196,26 @@ export default function EligibilityForm({
   const [generatingReport, setGeneratingReport] = useState(false);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((p) => ({ ...p, [key]: value }));
+    setForm((p) => ({
+      ...p,
+      [key]: value,
+      ...(key === "trade_type" ? { preferred_job_types: [] } : {}),
+    }));
     if (key === "phone" && OTP_REQUIRED) {
       setVerified(false);
     }
+  }
+
+  function toggleMulti(key: "preferred_job_types" | "current_lead_sources", value: string) {
+    setForm((p) => {
+      const current = p[key];
+      return {
+        ...p,
+        [key]: current.includes(value)
+          ? current.filter((item) => item !== value)
+          : [...current, value],
+      };
+    });
   }
 
   function handleAbnChange(next: AbnSelected | null) {
@@ -215,7 +350,7 @@ export default function EligibilityForm({
     setReportError("");
 
     try {
-      const res = await fetch("/api/joinus/generate-report", {
+      const reportRequest = fetch("/api/joinus/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -227,12 +362,21 @@ export default function EligibilityForm({
           website: normaliseUrl(form.website),
           average_job_value: form.average_job_value,
           capacity_per_month: form.capacity_per_month,
+          close_rate: form.close_rate,
           can_respond_24h: form.can_respond_24h,
           current_marketing_issue: form.current_marketing_issue,
+          gross_margin_range: form.gross_margin_range,
+          current_marketing_spend: form.current_marketing_spend,
+          preferred_job_types: form.preferred_job_types,
+          current_lead_sources: form.current_lead_sources,
           phone: form.phone,
           email: form.email,
         }),
       });
+      const [res] = await Promise.all([
+        reportRequest,
+        sleep(MIN_REPORT_LOADING_MS),
+      ]);
       const json = (await res.json().catch(() => ({}))) as {
         status?: string;
         report?: AreaOpportunityReport;
@@ -448,6 +592,27 @@ export default function EligibilityForm({
             </Field>
 
             <Field>
+              <label htmlFor="gross_margin_range" className={LABEL}>
+                Approximate gross margin
+              </label>
+              <select
+                id="gross_margin_range"
+                value={form.gross_margin_range}
+                onChange={(e) => update("gross_margin_range", e.target.value)}
+                className={`${INPUT} appearance-none cursor-pointer`}
+              >
+                <option value="" disabled>
+                  Select a range…
+                </option>
+                {GROSS_MARGIN_OPTIONS.map((v) => (
+                  <option key={v} value={v} className="bg-black-deep">
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field>
               <span className={LABEL}>
                 How many extra jobs could you take on per month?
               </span>
@@ -457,6 +622,62 @@ export default function EligibilityForm({
                 value={form.capacity_per_month}
                 onChange={(v) => update("capacity_per_month", v)}
                 cols={4}
+              />
+            </Field>
+
+            <Field>
+              <span className={LABEL}>
+                Roughly how many quoted jobs do you usually win?
+              </span>
+              <PillGroup
+                name="close_rate"
+                options={CLOSE_RATE_OPTIONS.map((v) => ({ value: v, label: v }))}
+                value={form.close_rate}
+                onChange={(v) => update("close_rate", v)}
+                cols={4}
+              />
+            </Field>
+
+            <Field>
+              <label htmlFor="current_marketing_spend" className={LABEL}>
+                Current monthly marketing spend
+              </label>
+              <select
+                id="current_marketing_spend"
+                value={form.current_marketing_spend}
+                onChange={(e) =>
+                  update("current_marketing_spend", e.target.value)
+                }
+                className={`${INPUT} appearance-none cursor-pointer`}
+              >
+                <option value="" disabled>
+                  Select a range…
+                </option>
+                {MARKETING_SPEND_OPTIONS.map((v) => (
+                  <option key={v} value={v} className="bg-black-deep">
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field>
+              <span className={LABEL}>Preferred job types</span>
+              <MultiSelectGroup
+                name="preferred_job_types"
+                options={getPreferredJobOptions(form.trade_type)}
+                value={form.preferred_job_types}
+                onChange={(v) => toggleMulti("preferred_job_types", v)}
+              />
+            </Field>
+
+            <Field>
+              <span className={LABEL}>Current lead sources</span>
+              <MultiSelectGroup
+                name="current_lead_sources"
+                options={LEAD_SOURCE_OPTIONS}
+                value={form.current_lead_sources}
+                onChange={(v) => toggleMulti("current_lead_sources", v)}
               />
             </Field>
 
@@ -474,19 +695,18 @@ export default function EligibilityForm({
             </Field>
 
             <Field>
-              <label htmlFor="current_marketing_issue" className={LABEL}>
-                What is your biggest marketing issue right now?{" "}
-                <span className="text-white/40">(optional)</span>
-              </label>
-              <textarea
-                id="current_marketing_issue"
-                rows={4}
+              <span className={LABEL}>
+                What would you want DirectBuild to improve first?
+              </span>
+              <PillGroup
+                name="current_marketing_issue"
+                options={IMPROVEMENT_OPTIONS.map((v) => ({
+                  value: v,
+                  label: v,
+                }))}
                 value={form.current_marketing_issue}
-                onChange={(e) =>
-                  update("current_marketing_issue", e.target.value)
-                }
-                placeholder="Tell us briefly. We read every application."
-                className={`${INPUT} min-h-[120px] resize-y leading-[1.5]`}
+                onChange={(v) => update("current_marketing_issue", v)}
+                cols={2}
               />
             </Field>
 
@@ -632,6 +852,41 @@ function PillGroup({
             }`}
           >
             {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MultiSelectGroup({
+  name,
+  options,
+  value,
+  onChange,
+}: {
+  name: string;
+  options: string[];
+  value: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" aria-label={name}>
+      {options.map((opt) => {
+        const selected = value.includes(opt);
+        return (
+          <button
+            key={opt}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(opt)}
+            className={`rounded-lg border min-h-[52px] px-4 text-left text-sm sm:text-base font-semibold transition-colors cursor-pointer ${
+              selected
+                ? "border-orange-safety bg-orange-safety/10 text-white"
+                : "border-white/12 bg-white/[0.04] text-white/70 hover:border-white/30 hover:bg-white/[0.07]"
+            }`}
+          >
+            {opt}
           </button>
         );
       })}
