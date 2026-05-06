@@ -61,7 +61,6 @@ const INPUT =
 const LABEL = "block text-sm font-medium text-white/85 mb-2";
 const HINT = "text-xs text-white/45 mt-1.5";
 const OTP_REQUIRED = true;
-const MIN_REPORT_LOADING_MS = 3000;
 
 const CLOSE_RATE_OPTIONS = ["Under 15%", "15–25%", "25–40%", "40%+", "Not sure"];
 const GROSS_MARGIN_OPTIONS = [
@@ -155,10 +154,6 @@ function normaliseUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) return "";
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getPreferredJobOptions(trade: string) {
@@ -350,7 +345,7 @@ export default function EligibilityForm({
     setReportError("");
 
     try {
-      const reportRequest = fetch("/api/joinus/generate-report", {
+      const res = await fetch("/api/joinus/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -373,10 +368,6 @@ export default function EligibilityForm({
           email: form.email,
         }),
       });
-      const [res] = await Promise.all([
-        reportRequest,
-        sleep(MIN_REPORT_LOADING_MS),
-      ]);
       const json = (await res.json().catch(() => ({}))) as {
         status?: string;
         report?: AreaOpportunityReport;

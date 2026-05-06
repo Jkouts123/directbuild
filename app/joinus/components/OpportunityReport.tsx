@@ -44,13 +44,25 @@ const LOADING_STEPS = [
   "Calculating pipeline scenario",
   "Preparing DirectBuild report",
 ];
+const MIN_LOADING_MS = 3000;
 
 export default function OpportunityReport({
   report,
   loading,
   error,
 }: OpportunityReportProps) {
-  if (loading) {
+  const [minimumLoadingDone, setMinimumLoadingDone] = useState(false);
+  const shouldShowLoading = loading || !minimumLoadingDone;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setMinimumLoadingDone(true);
+    }, MIN_LOADING_MS);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (shouldShowLoading) {
     return (
       <ReportShell>
         <ReportLoading />
