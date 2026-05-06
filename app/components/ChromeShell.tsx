@@ -9,7 +9,11 @@ export default function ChromeShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
-  const isStandaloneDoc = pathname.startsWith("/proposals/");
+  const isStandaloneDoc =
+    pathname.startsWith("/proposals/") ||
+    pathname.startsWith("/sandbox/") ||
+    pathname === "/joinus" ||
+    pathname.startsWith("/joinus/");
 
   if (isStandaloneDoc) {
     return (
