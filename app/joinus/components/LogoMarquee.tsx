@@ -6,6 +6,10 @@ import { LOGOS, type LogoEntry } from "../data";
 
 // Track is duplicated 2× so the keyframes can translate -50% for a seamless loop.
 const TRACK = [...LOGOS, ...LOGOS];
+const LOGO_SLOT =
+  "shrink-0 h-20 w-40 sm:h-24 sm:w-48 relative overflow-hidden";
+const LOGO_IMAGE =
+  "object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-[filter,opacity,transform] duration-300";
 
 export default function LogoMarquee() {
   return (
@@ -60,14 +64,14 @@ function LogoSlot({ logo }: { logo: LogoEntry }) {
   }
 
   return (
-    <div className="shrink-0 h-14 sm:h-16 w-32 sm:w-40 relative grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-[filter,opacity] duration-300">
+    <div className={LOGO_SLOT}>
       <Image
         src={logo.src}
         alt={logo.alt}
         fill
-        sizes="160px"
+        sizes="(min-width: 640px) 192px, 160px"
         unoptimized
-        className="object-contain"
+        className={`${LOGO_IMAGE} ${logo.imageClassName || ""}`}
         onError={() => setErrored(true)}
       />
     </div>

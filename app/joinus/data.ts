@@ -2,7 +2,12 @@
 // Pure data. No imports. Easy to tweak copy without touching components.
 
 export type LogoEntry =
-  | { name: string; src: string; alt: string }
+  | {
+      name: string;
+      src: string;
+      alt: string;
+      imageClassName?: string;
+    }
   | { name: string; wordmark: true };
 
 export const LOGOS: LogoEntry[] = [
@@ -35,11 +40,13 @@ export const LOGOS: LogoEntry[] = [
     name: "SimpliSolar",
     src: "/logos/joinus/simplisolar.png",
     alt: "SimpliSolar",
+    imageClassName: "scale-[4.1] sm:scale-[4.35]",
   },
   {
     name: "Ferguson’s Landscapes",
     src: "/logos/joinus/fergusons-landscapes.png",
     alt: "Ferguson’s Landscapes",
+    imageClassName: "scale-[2.25] sm:scale-[2.4]",
   },
 ];
 
