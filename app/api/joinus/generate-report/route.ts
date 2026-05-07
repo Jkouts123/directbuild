@@ -2,6 +2,10 @@ import { getLocalCompetitors } from "@/lib/data-sources/googlePlaces";
 import { getNswPlanningSignals } from "@/lib/data-sources/nswPlanning";
 import { calculateOpportunityScore } from "@/lib/directbuild/opportunityScore";
 import { buildReportCopy } from "@/lib/directbuild/reportCopy";
+import {
+  getServiceRegionsByIds,
+  normaliseServiceRegionInput,
+} from "@/lib/directbuild/serviceRegions";
 import { getSearchTradeLabel } from "@/lib/directbuild/tradeKeywords";
 
 type ReportRequestBody = {
@@ -10,6 +14,8 @@ type ReportRequestBody = {
   abn?: unknown;
   trade_type?: unknown;
   service_area?: unknown;
+  service_states?: unknown;
+  service_region_ids?: unknown;
   locations_serviced?: unknown;
   average_job_value?: unknown;
   capacity_per_month?: unknown;
@@ -120,6 +126,7 @@ function calculateCommercialScenario(input: {
   averageJobValue: string;
   closeRate: string;
   grossMarginRange: string;
+  canRespond24h: string | boolean;
 }) {
   const capacity = parseCapacityRange(input.capacityPerMonth);
   const jobValue = parseMoneyRange(input.averageJobValue);
@@ -177,14 +184,20 @@ function calculateCommercialScenario(input: {
   const estimatedAdWalletRange = baseWallet
     ? formatMoneyRange(baseWallet.min * walletMultiplier, baseWallet.max * walletMultiplier)
     : "Average job value input needed";
+  const capacityMin = capacity?.min || 0;
+  const hasGoodEconomics = jobValue ? jobValue.min >= 7500 : false;
+  const canRespond =
+    typeof input.canRespond24h === "boolean"
+      ? input.canRespond24h
+      : input.canRespond24h.toLowerCase() === "yes";
   const recommendedActivationLevel =
-    input.score >= 75
-      ? "Priority measured activation"
-      : input.score >= 58
-        ? "Controlled test activation"
+    input.score >= 80 && capacityMin >= 6 && hasGoodEconomics && canRespond
+      ? "Scale-ready"
+      : input.score >= 58 && capacityMin >= 3 && hasGoodEconomics
+        ? "Controlled 30-day test"
         : input.score >= 40
-          ? "Manual review before activation"
-          : "Improve inputs before activation";
+          ? "Light test"
+          : "Needs review first";
 
   return {
     targetExtraJobs,
@@ -217,7 +230,20 @@ export async function POST(request: Request) {
     }
 
     const trade = asString(body.trade_type);
-    const serviceArea = asString(body.service_area);
+    const requestedServiceArea = normaliseServiceRegionInput(
+      asString(body.service_area),
+    );
+    const serviceRegionIds = asStringArray(body.service_region_ids);
+    const serviceStates = asStringArray(body.service_states);
+    const selectedRegions = getServiceRegionsByIds(serviceRegionIds);
+    const primaryRegion = selectedRegions[0];
+    const selectedRegionLabels = selectedRegions.map((region) => region.label);
+    const serviceArea =
+      selectedRegionLabels.length > 0
+        ? selectedRegionLabels.join(", ")
+        : requestedServiceArea;
+    const competitorSearchArea =
+      primaryRegion?.defaultCompetitorSearchArea || serviceArea;
 
     if (!trade) {
       return errorResponse("trade_type is required.");
@@ -232,11 +258,11 @@ export async function POST(request: Request) {
     const [competitorResult, planningResult] = await Promise.all([
       getLocalCompetitors({
         trade: searchTrade,
-        serviceArea,
+        serviceArea: competitorSearchArea,
       }).catch((error) => ({
         source: "google_places" as const,
         status: "error" as const,
-        query: `${searchTrade} ${serviceArea} NSW Australia`,
+        query: `${searchTrade} ${competitorSearchArea}`,
         competitors: [],
         summary: {
           competitorCount: 0,
@@ -250,12 +276,12 @@ export async function POST(request: Request) {
       })),
       getNswPlanningSignals({
         trade,
-        serviceArea,
+        serviceArea: competitorSearchArea,
       }).catch((error) => ({
         source: "nsw_planning" as const,
         status: "error" as const,
-        query: `${trade} ${serviceArea} NSW development applications`,
-        serviceArea,
+        query: `${trade} ${competitorSearchArea} NSW development applications`,
+        serviceArea: competitorSearchArea,
         relevantApplications: [],
         summary: {
           relevantApplicationCount: 0,
@@ -304,6 +330,10 @@ export async function POST(request: Request) {
       currentMarketingSpend: asString(body.current_marketing_spend),
       preferredJobTypes: asStringArray(body.preferred_job_types),
       currentLeadSources: asStringArray(body.current_lead_sources),
+      regionFitNote: primaryRegion?.regionFitNote,
+      selectedRegionLabels,
+      primaryRegionLabel: primaryRegion?.label,
+      scoreBreakdown: score.scoreBreakdown,
     });
     const scenario = calculateCommercialScenario({
       score: score.score,
@@ -311,6 +341,7 @@ export async function POST(request: Request) {
       averageJobValue: asString(body.average_job_value),
       closeRate: asString(body.close_rate),
       grossMarginRange: asString(body.gross_margin_range),
+      canRespond24h: asStringOrBoolean(body.can_respond_24h),
     });
 
     return Response.json({
@@ -320,6 +351,29 @@ export async function POST(request: Request) {
         fitLabel: score.fitLabel,
         trade,
         serviceArea,
+        serviceStates,
+        serviceRegionIds,
+        primaryRegion: primaryRegion
+          ? {
+              id: primaryRegion.id,
+              label: primaryRegion.label,
+              state: primaryRegion.state,
+              defaultCompetitorSearchArea:
+                primaryRegion.defaultCompetitorSearchArea,
+              regionFitNote: primaryRegion.regionFitNote,
+            }
+          : null,
+        selectedRegions: selectedRegions.map((region) => ({
+          id: region.id,
+          label: region.label,
+          state: region.state,
+          defaultCompetitorSearchArea: region.defaultCompetitorSearchArea,
+          regionFitNote: region.regionFitNote,
+        })),
+        regionReviewNote:
+          selectedRegions.length > 1
+            ? "This report focuses on the first selected region for the main competitor scan. Other selected regions will be reviewed as part of partner assessment."
+            : "",
         scoreBreakdown: score.scoreBreakdown,
         ...scenario,
         signals: {

@@ -19,6 +19,16 @@ type ReportCopyInput = {
   currentMarketingSpend?: string;
   preferredJobTypes?: string[];
   currentLeadSources?: string[];
+  regionFitNote?: string;
+  selectedRegionLabels?: string[];
+  primaryRegionLabel?: string;
+  planningDataPending?: boolean;
+  scoreBreakdown?: {
+    competitorGap: number;
+    planningSignal: number;
+    businessEconomics: number;
+    capacityReadiness: number;
+  };
 };
 
 export type ReportCopyResult = {
@@ -27,6 +37,15 @@ export type ReportCopyResult = {
   planningSummary: string;
   revenueScenario: string;
   pipelineRisk: string;
+  mainBottleneck: string;
+  bestNextCampaignAngle: string;
+  directBuildFitSummary: string;
+  scoreBreakdownSummary: {
+    businessEconomics: "Strong" | "Moderate" | "Needs review";
+    capacityReadiness: "Strong" | "Moderate" | "Needs review";
+    competitorPressure: "Light" | "Moderate" | "Competitive" | "Pending";
+    planningData: "Available" | "Pending" | "Incomplete";
+  };
   recommendedNextStep: string;
   disclaimers: string[];
 };
@@ -128,13 +147,114 @@ function buildPipelineRisk(input: ReportCopyInput) {
   return "Primary pipeline risk is execution quality. Visibility only becomes commercial value when enquiries are qualified, followed up, quoted, and tracked through to booked work.";
 }
 
-export function buildReportCopy(input: ReportCopyInput): ReportCopyResult {
+function buildMainBottleneck(input: ReportCopyInput) {
+  if (!input.capacityPerMonth) return "Low spare capacity";
+  if (!isYes(input.canRespond24h)) {
+    return "Follow-up and quote tracking should be reviewed first";
+  }
+  if (!input.averageJobValue || /under/i.test(input.averageJobValue)) {
+    return "Job value may be low for paid acquisition";
+  }
+  if ((input.selectedRegionLabels?.length || 0) > 1) {
+    return "Needs tighter region focus";
+  }
+  if (input.competitorStatus !== "success") return "Competitor scan pending";
+  if (input.competitorCount >= 12) return "Competitor-heavy region";
+  if (input.planningStatus !== "success") return "Planning/property data pending";
+  if (!input.preferredJobTypes || input.preferredJobTypes.length === 0) {
+    return "Needs clearer job-type targeting";
+  }
+  return "Follow-up and quote tracking should be reviewed first";
+}
+
+function buildBestNextCampaignAngle(input: ReportCopyInput) {
+  const firstPreferredJob = input.preferredJobTypes?.[0];
+  if (firstPreferredJob) return `${firstPreferredJob} for private homeowners`;
+
+  const trade = input.trade.toLowerCase();
+  if (trade.includes("landscap")) return "Backyard upgrades and retaining walls";
+  if (trade.includes("carpent")) {
+    return "Decks and outdoor carpentry for private homeowners";
+  }
+  if (trade.includes("roof")) return "Roof repairs and re-roofing enquiries";
+  if (trade.includes("solar")) return "Residential solar and battery enquiries";
+  if (trade.includes("build") || trade.includes("renovat")) {
+    return "Higher-value residential renovation enquiries";
+  }
+
+  return `Higher-value private residential ${input.trade} enquiries`;
+}
+
+function buildFitSummary(input: ReportCopyInput) {
+  const multipleRegions = (input.selectedRegionLabels?.length || 0) > 1;
+  const regionLine = input.regionFitNote ? `${input.regionFitNote} ` : "";
+  const multiRegionLine = multipleRegions
+    ? "Because you selected multiple regions, DirectBuild would review which region should be activated first based on fit, competition, response capacity, and job economics. "
+    : "";
+
+  return `${regionLine}${multiRegionLine}Your selected region may be suitable for DirectBuild partner review. The right first move is not broad scaling; it is a measured activation where DirectBuild qualifies enquiries, supports follow-up, tracks quotes, and connects marketing activity to booked-job outcomes.`;
+}
+
+function labelScore(
+  score: number,
+  strongAt: number,
+  moderateAt: number,
+): "Strong" | "Moderate" | "Needs review" {
+  if (score >= strongAt) return "Strong";
+  if (score >= moderateAt) return "Moderate";
+  return "Needs review";
+}
+
+function buildScoreBreakdownSummary(
+  input: ReportCopyInput,
+): ReportCopyResult["scoreBreakdownSummary"] {
+  const competitorPressure =
+    input.competitorStatus !== "success"
+      ? "Pending"
+      : input.competitorCount >= 12
+        ? "Competitive"
+        : input.competitorCount >= 6
+          ? "Moderate"
+          : "Light";
+  const planningData =
+    input.planningStatus === "success"
+      ? "Available"
+      : input.planningStatus === "error"
+        ? "Pending"
+        : "Incomplete";
+
   return {
-    areaSummary: `${input.serviceArea} is assessed as a ${input.fitLabel.toLowerCase()} for ${input.trade}. Score: ${input.score}/100, based on supplied business inputs and available market signals.`,
+    businessEconomics: input.scoreBreakdown
+      ? labelScore(input.scoreBreakdown.businessEconomics, 22, 14)
+      : labelScore(input.score, 75, 58),
+    capacityReadiness: input.scoreBreakdown
+      ? labelScore(input.scoreBreakdown.capacityReadiness, 16, 10)
+      : isYes(input.canRespond24h)
+        ? labelScore(input.score, 58, 40)
+        : "Needs review",
+    competitorPressure,
+    planningData,
+  };
+}
+
+export function buildReportCopy(input: ReportCopyInput): ReportCopyResult {
+  const multipleRegions = (input.selectedRegionLabels?.length || 0) > 1;
+  const regionFocus = input.primaryRegionLabel || input.serviceArea;
+
+  return {
+    areaSummary: `${
+      multipleRegions
+        ? "Because multiple regions were selected, DirectBuild should review which region to activate first rather than spreading spend too thin. "
+        : ""
+    }You appear best suited to a measured DirectBuild activation, not broad scaling yet. The first move should be validating ${regionFocus}, qualifying enquiries properly, and tracking quotes through to booked-job outcomes before increasing ad spend.`,
     competitorSummary: buildCompetitorSummary(input),
     planningSummary: buildPlanningSummary(input),
     revenueScenario: buildRevenueScenario(input),
     pipelineRisk: buildPipelineRisk(input),
+    mainBottleneck: buildMainBottleneck(input),
+    bestNextCampaignAngle: buildBestNextCampaignAngle(input),
+    directBuildFitSummary: buildFitSummary(input),
+    scoreBreakdownSummary: buildScoreBreakdownSummary(input),
     recommendedNextStep:
       "Confirm the job mix, economics, and service-area coverage. Then run a measured DirectBuild activation with qualification, follow-up, quote tracking, and booked-job visibility in place.",
     disclaimers: [
