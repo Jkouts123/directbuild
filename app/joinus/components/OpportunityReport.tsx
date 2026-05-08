@@ -33,6 +33,19 @@ export type AreaOpportunityReport = {
     businessEconomics?: number;
     capacityReadiness?: number;
   };
+  signals?: {
+    planning?: {
+      status: string;
+      directApplicationCount?: number;
+      contextApplicationCount?: number;
+      relevantApplicationCount?: number;
+      topDirectKeywords?: string[];
+      topContextKeywords?: string[];
+      topMatchedKeywords?: string[];
+      signalStrength?: "low" | "moderate" | "strong";
+      dataBasis?: string;
+    };
+  };
   copy: {
     areaSummary: string;
     competitorSummary: string;
@@ -122,6 +135,17 @@ export default function OpportunityReport({
     ["Estimated ad wallet", report.estimatedAdWalletRange],
     ["Estimated gross profit", report.estimatedGrossProfitRange || undefined],
   ].filter((item): item is [string, string] => typeof item[1] === "string");
+  const planning = report.signals?.planning;
+  const planningKeywords =
+    planning?.topDirectKeywords && planning.topDirectKeywords.length > 0
+      ? planning.topDirectKeywords
+      : planning?.topMatchedKeywords || [];
+  const planningStrength =
+    planning?.signalStrength === "strong"
+      ? "Strong"
+      : planning?.signalStrength === "moderate"
+        ? "Moderate"
+        : "Low";
 
   return (
     <ReportShell>
@@ -202,6 +226,25 @@ export default function OpportunityReport({
           <ReportSection title="Planning data status">
             {report.copy.planningSummary}
           </ReportSection>
+          {planning?.status === "success" && (
+            <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
+              <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
+                Supporting signals
+              </h4>
+              <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                NSW DA/CDC activity: {planningStrength}
+              </p>
+              {planningKeywords.length > 0 && (
+                <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                  Recently updated records included:{" "}
+                  {planningKeywords.join(", ")}.
+                </p>
+              )}
+              <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                Planning activity signal only, not guaranteed homeowner demand.
+              </p>
+            </section>
+          )}
           <ReportSection title="Main bottleneck">
             {report.copy.mainBottleneck || "Partner fit should be reviewed before activation."}
           </ReportSection>

@@ -1,5 +1,9 @@
 import { getLocalCompetitors } from "@/lib/data-sources/googlePlaces";
-import { getNswPlanningSignals } from "@/lib/data-sources/nswPlanning";
+import {
+  getNswPlanningSignals,
+  getNswPlanningUnavailableResult,
+  getSupportedNswPlanningCouncil,
+} from "@/lib/data-sources/nswPlanning";
 import { calculateOpportunityScore } from "@/lib/directbuild/opportunityScore";
 import { buildReportCopy } from "@/lib/directbuild/reportCopy";
 import {
@@ -219,6 +223,50 @@ function errorResponse(message: string, status = 400) {
   );
 }
 
+function includesNswServiceArea(input: {
+  serviceStates: string[];
+  primaryRegion?: { state: string } | null;
+  serviceArea: string;
+}) {
+  return (
+    input.primaryRegion?.state === "NSW" ||
+    input.serviceStates.some((state) => state.toUpperCase() === "NSW") ||
+    /\bnsw\b|sydney|penrith|western sydney/i.test(input.serviceArea)
+  );
+}
+
+function resolveNswPlanningArea(input: {
+  serviceArea: string;
+  serviceRegionIds: string[];
+  primaryRegion?: {
+    id: string;
+    label: string;
+    defaultCompetitorSearchArea: string;
+  } | null;
+}) {
+  if (
+    input.serviceRegionIds.includes("nsw-sydney-western-sydney") ||
+    input.primaryRegion?.id === "nsw-sydney-western-sydney" ||
+    input.serviceArea === "Sydney - Western Sydney"
+  ) {
+    return {
+      serviceArea: "Penrith",
+      councilName: "Penrith City Council",
+    };
+  }
+
+  const area =
+    input.primaryRegion?.defaultCompetitorSearchArea || input.serviceArea;
+  const councilName = getSupportedNswPlanningCouncil(area);
+
+  return councilName
+    ? {
+        serviceArea: area,
+        councilName,
+      }
+    : null;
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => null)) as
@@ -244,6 +292,17 @@ export async function POST(request: Request) {
         : requestedServiceArea;
     const competitorSearchArea =
       primaryRegion?.defaultCompetitorSearchArea || serviceArea;
+    const nswPlanningArea = includesNswServiceArea({
+      serviceStates,
+      primaryRegion,
+      serviceArea,
+    })
+      ? resolveNswPlanningArea({
+          serviceArea,
+          serviceRegionIds,
+          primaryRegion,
+        })
+      : null;
 
     if (!trade) {
       return errorResponse("trade_type is required.");
@@ -254,6 +313,57 @@ export async function POST(request: Request) {
     }
 
     const searchTrade = getSearchTradeLabel(trade);
+    const shouldCheckNswPlanning = includesNswServiceArea({
+      serviceStates,
+      primaryRegion,
+      serviceArea,
+    });
+    const planningPromise =
+      shouldCheckNswPlanning && nswPlanningArea
+        ? getNswPlanningSignals({
+            trade,
+            serviceArea: nswPlanningArea.serviceArea,
+            councilName: nswPlanningArea.councilName,
+          }).catch((error) => ({
+            source: "nsw_planning" as const,
+            status: "error" as const,
+            query: `${trade} ${nswPlanningArea.serviceArea} NSW DA CDC planning activity`,
+            serviceArea: nswPlanningArea.serviceArea,
+            councilName: nswPlanningArea.councilName,
+            directApplicationCount: 0,
+            contextApplicationCount: 0,
+            relevantApplicationCount: 0,
+            topDirectKeywords: [],
+            topContextKeywords: [],
+            topMatchedKeywords: [],
+            signalStrength: "low" as const,
+            dataBasis:
+              "NSW Planning Portal Application Tracker records lodged in the last 365 days, summarised by keyword only.",
+            summary: {
+              directApplicationCount: 0,
+              contextApplicationCount: 0,
+              relevantApplicationCount: 0,
+              topDirectKeywords: [],
+              topContextKeywords: [],
+              topMatchedKeywords: [],
+              signalStrength: "low" as const,
+              dataBasis:
+                "NSW Planning Portal Application Tracker records lodged in the last 365 days, summarised by keyword only.",
+            },
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unknown NSW Planning data error.",
+          }))
+        : Promise.resolve(
+            getNswPlanningUnavailableResult({
+              trade,
+              serviceArea,
+              reason: shouldCheckNswPlanning
+                ? "No supported NSW Planning council mapping exists for this service area yet."
+                : "NSW Planning connector is only enabled for supported NSW service areas.",
+            }),
+          );
 
     const [competitorResult, planningResult] = await Promise.all([
       getLocalCompetitors({
@@ -274,25 +384,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Unknown Google Places error.",
       })),
-      getNswPlanningSignals({
-        trade,
-        serviceArea: competitorSearchArea,
-      }).catch((error) => ({
-        source: "nsw_planning" as const,
-        status: "error" as const,
-        query: `${trade} ${competitorSearchArea} NSW development applications`,
-        serviceArea: competitorSearchArea,
-        relevantApplications: [],
-        summary: {
-          relevantApplicationCount: 0,
-          topMatchedKeywords: [],
-          signalStrength: "low" as const,
-        },
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown NSW Planning data error.",
-      })),
+      planningPromise,
     ]);
 
     const score = calculateOpportunityScore({
@@ -321,6 +413,8 @@ export async function POST(request: Request) {
       relevantApplicationCount:
         planningResult.summary.relevantApplicationCount,
       topMatchedKeywords: planningResult.summary.topMatchedKeywords,
+      topDirectKeywords: planningResult.summary.topDirectKeywords,
+      topContextKeywords: planningResult.summary.topContextKeywords,
       averageJobValue: asString(body.average_job_value),
       capacityPerMonth: asString(body.capacity_per_month),
       closeRate: asString(body.close_rate),

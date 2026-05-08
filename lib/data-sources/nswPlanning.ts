@@ -1,91 +1,87 @@
 type GetNswPlanningSignalsInput = {
   trade: string;
   serviceArea: string;
+  councilName?: string;
   limit?: number;
 };
 
-type PlanningApplicationSignal = {
-  council?: string;
-  suburb?: string;
-  address?: string;
-  description?: string;
-  lodgedDate?: string;
-  status?: string;
-  matchedKeywords: string[];
-};
+export type NswPlanningStatus =
+  | "success"
+  | "error"
+  | "no_results"
+  | "unavailable";
 
-type GetNswPlanningSignalsResult = {
+export type GetNswPlanningSignalsResult = {
   source: "nsw_planning";
-  status: "success" | "error" | "no_results";
+  status: NswPlanningStatus;
   query: string;
   serviceArea: string;
-  relevantApplications: PlanningApplicationSignal[];
+  councilName?: string;
+  directApplicationCount: number;
+  contextApplicationCount: number;
+  relevantApplicationCount: number;
+  topDirectKeywords: string[];
+  topContextKeywords: string[];
+  topMatchedKeywords: string[];
+  signalStrength: "low" | "moderate" | "strong";
+  dataBasis: string;
   summary: {
+    directApplicationCount: number;
+    contextApplicationCount: number;
     relevantApplicationCount: number;
+    topDirectKeywords: string[];
+    topContextKeywords: string[];
     topMatchedKeywords: string[];
     signalStrength: "low" | "moderate" | "strong";
+    dataBasis: string;
   };
   error?: string;
 };
 
-type CkanPackageResponse = {
-  success?: boolean;
-  result?: {
-    resources?: Array<{
-      id?: string;
-      name?: string;
-      format?: string;
-      datastore_active?: boolean;
-      url?: string;
-    }>;
-  };
-  error?: {
-    message?: string;
-  };
+type TrackerFeature = {
+  properties?: Record<string, unknown>;
 };
 
-type CkanDatastoreResponse = {
-  success?: boolean;
-  result?: {
-    records?: Array<Record<string, unknown>>;
-  };
-  error?: {
-    message?: string;
-  };
+type TrackerResponse = {
+  TotalCount?: number;
+  features?: TrackerFeature[];
+  error?: unknown;
 };
 
-const ONLINE_DA_PACKAGE_URL =
-  "https://data.nsw.gov.au/data/api/3/action/package_show?id=online-da-data-api";
+type PlanningApplicationSignal = {
+  directKeywords: string[];
+  contextKeywords: string[];
+};
 
-const CKAN_DATASTORE_SEARCH_URL =
-  "https://data.nsw.gov.au/data/api/3/action/datastore_search";
+const APPLICATION_TRACKER_URL =
+  "https://api.apps1.nsw.gov.au/eplanning/data/v0/DAApplicationTracker";
 
 const RECENT_APPLICATION_WINDOW_DAYS = 365;
+const DEFAULT_PAGE_SIZE = 100;
 
-const KEYWORDS_BY_TRADE = {
+const NSW_COUNCIL_BY_AREA: Record<string, string> = {
+  penrith: "Penrith City Council",
+  "penrith city council": "Penrith City Council",
+  "sydney - western sydney": "Penrith City Council",
+  "western sydney": "Penrith City Council",
+};
+
+const DIRECT_KEYWORDS_BY_TRADE = {
   landscaping: [
-    "landscaping",
-    "retaining wall",
     "pool",
     "swimming pool",
     "deck",
     "patio",
+    "fencing",
+    "retaining wall",
     "paving",
+    "landscaping",
     "turf",
-    "outdoor area",
     "alfresco",
-    "alterations",
-    "additions",
+    "pergola",
+    "earthworks",
   ],
-  roofing: [
-    "roof",
-    "re-roof",
-    "roofing",
-    "gutter",
-    "stormwater",
-    "alterations",
-    "additions",
-  ],
+  roofing: ["roof", "re-roof", "roofing", "gutter", "stormwater"],
   builders: [
     "alterations",
     "additions",
@@ -100,48 +96,65 @@ const KEYWORDS_BY_TRADE = {
   solar: ["solar", "photovoltaic", "battery", "electrical"],
 } satisfies Record<string, string[]>;
 
-function buildResult(
-  status: GetNswPlanningSignalsResult["status"],
-  query: string,
-  serviceArea: string,
-  relevantApplications: PlanningApplicationSignal[],
-  error?: string,
-): GetNswPlanningSignalsResult {
-  return {
-    source: "nsw_planning",
-    status,
-    query,
-    serviceArea,
-    relevantApplications,
-    summary: {
-      relevantApplicationCount: relevantApplications.length,
-      topMatchedKeywords: getTopMatchedKeywords(relevantApplications),
-      signalStrength: getSignalStrength(relevantApplications.length),
-    },
-    ...(error ? { error } : {}),
-  };
+const CONTEXT_KEYWORDS = [
+  "residential",
+  "dwelling house",
+  "alterations and additions",
+  "alterations or additions",
+  "secondary dwelling",
+  "dual occupancy",
+  "demolition",
+  "new structure",
+];
+
+function normaliseKey(value: string) {
+  return value.trim().toLowerCase().replace(/,.*$/, "").replace(/\s+/g, " ");
+}
+
+export function getSupportedNswPlanningCouncil(serviceArea: string) {
+  return NSW_COUNCIL_BY_AREA[normaliseKey(serviceArea)];
+}
+
+export function getNswPlanningUnavailableResult(input: {
+  trade: string;
+  serviceArea: string;
+  councilName?: string;
+  reason?: string;
+}): GetNswPlanningSignalsResult {
+  return buildResult({
+    status: "unavailable",
+    query: `${input.trade} ${input.serviceArea} NSW DA CDC planning activity`,
+    serviceArea: input.serviceArea,
+    councilName: input.councilName,
+    directApplications: [],
+    contextApplications: [],
+    dataBasis:
+      input.reason ||
+      "Planning activity data is unavailable/pending access for this service area.",
+    error: input.reason,
+  });
 }
 
 function normaliseLimit(limit?: number) {
-  if (!Number.isFinite(limit)) return 10;
-  return Math.max(1, Math.min(Math.trunc(limit || 10), 50));
+  if (!Number.isFinite(limit)) return DEFAULT_PAGE_SIZE;
+  return Math.max(10, Math.min(Math.trunc(limit || DEFAULT_PAGE_SIZE), 4000));
 }
 
 function getKeywordsForTrade(trade: string) {
   const lowerTrade = trade.toLowerCase();
 
-  if (lowerTrade.includes("landscap")) return KEYWORDS_BY_TRADE.landscaping;
-  if (lowerTrade.includes("roof")) return KEYWORDS_BY_TRADE.roofing;
-  if (lowerTrade.includes("solar")) return KEYWORDS_BY_TRADE.solar;
+  if (lowerTrade.includes("landscap")) return DIRECT_KEYWORDS_BY_TRADE.landscaping;
+  if (lowerTrade.includes("roof")) return DIRECT_KEYWORDS_BY_TRADE.roofing;
+  if (lowerTrade.includes("solar")) return DIRECT_KEYWORDS_BY_TRADE.solar;
   if (
     lowerTrade.includes("build") ||
     lowerTrade.includes("granny") ||
     lowerTrade.includes("renovat")
   ) {
-    return KEYWORDS_BY_TRADE.builders;
+    return DIRECT_KEYWORDS_BY_TRADE.builders;
   }
 
-  return KEYWORDS_BY_TRADE.builders;
+  return DIRECT_KEYWORDS_BY_TRADE.builders;
 }
 
 function getMatchedKeywords(text: string, keywords: string[]) {
@@ -149,11 +162,11 @@ function getMatchedKeywords(text: string, keywords: string[]) {
   return keywords.filter((keyword) => normalisedText.includes(keyword));
 }
 
-function getTopMatchedKeywords(applications: PlanningApplicationSignal[]) {
+function countTopKeywords(applications: PlanningApplicationSignal[], field: "directKeywords" | "contextKeywords") {
   const counts = new Map<string, number>();
 
   for (const application of applications) {
-    for (const keyword of application.matchedKeywords) {
+    for (const keyword of application[field]) {
       counts.set(keyword, (counts.get(keyword) || 0) + 1);
     }
   }
@@ -164,7 +177,7 @@ function getTopMatchedKeywords(applications: PlanningApplicationSignal[]) {
     .map(([keyword]) => keyword);
 }
 
-function getSignalStrength(count: number) {
+function getSignalStrength(count: number): "low" | "moderate" | "strong" {
   if (count >= 8) return "strong";
   if (count >= 3) return "moderate";
   return "low";
@@ -177,124 +190,113 @@ function pickString(record: Record<string, unknown>, keys: string[]) {
     if (typeof value === "number") return String(value);
   }
 
-  return undefined;
+  return "";
 }
 
-function getLodgedDate(record: Record<string, unknown>) {
-  return pickString(record, [
-    "lodgedDate",
-    "LodgedDate",
-    "lodgementDate",
-    "LodgementDate",
-    "dateLodged",
-    "DateLodged",
-  ]);
+function getRecentDateFrom() {
+  const date = new Date();
+  date.setDate(date.getDate() - RECENT_APPLICATION_WINDOW_DAYS);
+  return date.toISOString().slice(0, 10);
 }
 
-function isRecentApplication(lodgedDate?: string) {
-  if (!lodgedDate) return true;
-
-  const timestamp = Date.parse(lodgedDate);
-  if (Number.isNaN(timestamp)) return true;
-
-  const ageMs = Date.now() - timestamp;
-  const recentWindowMs = RECENT_APPLICATION_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  return ageMs <= recentWindowMs;
-}
-
-function mapRecordToApplication(
-  record: Record<string, unknown>,
-  keywords: string[],
+function mapFeatureToSignal(
+  feature: TrackerFeature,
+  directKeywords: string[],
 ): PlanningApplicationSignal | null {
-  const description = pickString(record, [
-    "description",
-    "developmentDescription",
-    "DevelopmentDescription",
-    "development_description",
-    "applicationDescription",
-    "ApplicationDescription",
-  ]);
-  const address = pickString(record, [
-    "address",
-    "propertyAddress",
-    "PropertyAddress",
-    "siteAddress",
-    "SiteAddress",
-  ]);
-  const lodgedDate = getLodgedDate(record);
-  const searchableText = [description, address].filter(Boolean).join(" ");
-  const matchedKeywords = getMatchedKeywords(searchableText, keywords);
+  const properties = feature.properties || {};
+  const searchableText = [
+    pickString(properties, ["PROJECT_TITLE"]),
+    pickString(properties, ["TYPE_OF_DEVELOPMENT"]),
+    pickString(properties, ["APPLICATION_TYPE"]),
+    pickString(properties, ["STATUS"]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const matchedDirectKeywords = getMatchedKeywords(searchableText, directKeywords);
+  const matchedContextKeywords = getMatchedKeywords(searchableText, CONTEXT_KEYWORDS);
 
-  if (!isRecentApplication(lodgedDate)) return null;
-  if (matchedKeywords.length === 0) return null;
+  if (matchedDirectKeywords.length === 0 && matchedContextKeywords.length === 0) {
+    return null;
+  }
 
   return {
-    ...(pickString(record, ["council", "Council", "councilName", "CouncilName"])
-      ? {
-          council: pickString(record, [
-            "council",
-            "Council",
-            "councilName",
-            "CouncilName",
-          ]),
-        }
-      : {}),
-    ...(pickString(record, ["suburb", "Suburb", "locality", "Locality"])
-      ? { suburb: pickString(record, ["suburb", "Suburb", "locality", "Locality"]) }
-      : {}),
-    ...(address ? { address } : {}),
-    ...(description ? { description } : {}),
-    ...(lodgedDate ? { lodgedDate } : {}),
-    ...(pickString(record, ["status", "Status", "applicationStatus"])
-      ? {
-          status: pickString(record, [
-            "status",
-            "Status",
-            "applicationStatus",
-          ]),
-        }
-      : {}),
-    matchedKeywords,
+    directKeywords: matchedDirectKeywords,
+    contextKeywords: matchedContextKeywords,
   };
 }
 
-async function findPublicDatastoreResource() {
-  const response = await fetch(ONLINE_DA_PACKAGE_URL, {
-    headers: { Accept: "application/json" },
+async function fetchTrackerRecords(input: {
+  councilName: string;
+  pageSize: number;
+}) {
+  const response = await fetch(APPLICATION_TRACKER_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ApplicationStatus: "ALL",
+      CouncilDisplayName: input.councilName,
+      LodgementDateFrom: getRecentDateFrom(),
+      PageNumber: 1,
+      PageSize: input.pageSize,
+    }),
   });
-  const data = (await response.json().catch(() => ({}))) as CkanPackageResponse;
+  const data = (await response.json().catch(() => ({}))) as TrackerResponse;
 
-  if (!response.ok || !data.success) {
+  if (!response.ok) {
     throw new Error(
-      data.error?.message ||
-        `NSW Planning metadata request failed with status ${response.status}.`,
+      `NSW Planning tracker request failed with status ${response.status}.`,
     );
   }
 
-  return (data.result?.resources || []).find(
-    (resource) => resource.datastore_active && resource.id,
-  );
+  return data.features || [];
 }
 
-async function fetchDatastoreRecords(resourceId: string, query: string, limit: number) {
-  const url = new URL(CKAN_DATASTORE_SEARCH_URL);
-  url.searchParams.set("resource_id", resourceId);
-  url.searchParams.set("q", query);
-  url.searchParams.set("limit", String(limit));
+function buildResult(input: {
+  status: NswPlanningStatus;
+  query: string;
+  serviceArea: string;
+  councilName?: string;
+  directApplications: PlanningApplicationSignal[];
+  contextApplications: PlanningApplicationSignal[];
+  dataBasis: string;
+  error?: string;
+}): GetNswPlanningSignalsResult {
+  const directApplicationCount = input.directApplications.length;
+  const contextApplicationCount = input.contextApplications.length;
+  const relevantApplicationCount = directApplicationCount + contextApplicationCount;
+  const topDirectKeywords = countTopKeywords(input.directApplications, "directKeywords");
+  const topContextKeywords = countTopKeywords(
+    input.contextApplications,
+    "contextKeywords",
+  );
+  const topMatchedKeywords = Array.from(
+    new Set([...topDirectKeywords, ...topContextKeywords]),
+  ).slice(0, 5);
+  const signalStrength = getSignalStrength(relevantApplicationCount);
+  const summary = {
+    directApplicationCount,
+    contextApplicationCount,
+    relevantApplicationCount,
+    topDirectKeywords,
+    topContextKeywords,
+    topMatchedKeywords,
+    signalStrength,
+    dataBasis: input.dataBasis,
+  };
 
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-  });
-  const data = (await response.json().catch(() => ({}))) as CkanDatastoreResponse;
-
-  if (!response.ok || !data.success) {
-    throw new Error(
-      data.error?.message ||
-        `NSW Planning datastore request failed with status ${response.status}.`,
-    );
-  }
-
-  return data.result?.records || [];
+  return {
+    source: "nsw_planning",
+    status: input.status,
+    query: input.query,
+    serviceArea: input.serviceArea,
+    ...(input.councilName ? { councilName: input.councilName } : {}),
+    ...summary,
+    summary,
+    ...(input.error ? { error: input.error } : {}),
+  };
 }
 
 export async function getNswPlanningSignals(
@@ -302,44 +304,72 @@ export async function getNswPlanningSignals(
 ): Promise<GetNswPlanningSignalsResult> {
   const trade = input.trade.trim();
   const serviceArea = input.serviceArea.trim();
-  const query = `${trade} ${serviceArea} NSW development applications`;
-  const keywords = getKeywordsForTrade(trade);
-  const limit = normaliseLimit(input.limit);
+  const councilName =
+    input.councilName || getSupportedNswPlanningCouncil(serviceArea);
+  const query = `${trade} ${serviceArea} NSW DA CDC planning activity`;
+  const dataBasis =
+    "NSW Planning Portal Application Tracker records lodged in the last 365 days, summarised by keyword only.";
+
+  if (!councilName) {
+    return getNswPlanningUnavailableResult({
+      trade,
+      serviceArea,
+      reason:
+        "No supported NSW Planning council mapping exists for this service area yet.",
+    });
+  }
 
   try {
-    const resource = await findPublicDatastoreResource();
+    const features = await fetchTrackerRecords({
+      councilName,
+      pageSize: normaliseLimit(input.limit),
+    });
+    const directKeywords = getKeywordsForTrade(trade);
+    const signals = features
+      .map((feature) => mapFeatureToSignal(feature, directKeywords))
+      .filter((signal): signal is PlanningApplicationSignal => signal !== null);
+    const directApplications = signals.filter(
+      (signal) => signal.directKeywords.length > 0,
+    );
+    const contextApplications = signals.filter(
+      (signal) =>
+        signal.directKeywords.length === 0 && signal.contextKeywords.length > 0,
+    );
 
-    if (!resource?.id) {
-      return buildResult(
-        "error",
+    if (signals.length === 0) {
+      return buildResult({
+        status: "no_results",
         query,
         serviceArea,
-        [],
-        "NSW Online DA open-data metadata is available, but no unauthenticated machine-readable DA application records endpoint is exposed by the public CKAN package.",
-      );
+        councilName,
+        directApplications: [],
+        contextApplications: [],
+        dataBasis,
+      });
     }
 
-    const records = await fetchDatastoreRecords(resource.id, serviceArea, limit);
-    const relevantApplications = records
-      .map((record) => mapRecordToApplication(record, keywords))
-      .filter(
-        (application): application is PlanningApplicationSignal =>
-          application !== null,
-      )
-      .slice(0, limit);
-
-    if (relevantApplications.length === 0) {
-      return buildResult("no_results", query, serviceArea, []);
-    }
-
-    return buildResult("success", query, serviceArea, relevantApplications);
-  } catch (error) {
-    return buildResult(
-      "error",
+    return buildResult({
+      status: "success",
       query,
       serviceArea,
-      [],
-      error instanceof Error ? error.message : "Unknown NSW Planning data error.",
-    );
+      councilName,
+      directApplications,
+      contextApplications,
+      dataBasis,
+    });
+  } catch (error) {
+    return buildResult({
+      status: "error",
+      query,
+      serviceArea,
+      councilName,
+      directApplications: [],
+      contextApplications: [],
+      dataBasis,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unknown NSW Planning tracker error.",
+    });
   }
 }

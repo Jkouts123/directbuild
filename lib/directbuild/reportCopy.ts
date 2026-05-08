@@ -7,9 +7,11 @@ type ReportCopyInput = {
   averageRating: number | null;
   averageReviewCount: number | null;
   competitorStatus: string;
-  planningStatus: "success" | "error" | "no_results";
+  planningStatus: "success" | "error" | "no_results" | "unavailable";
   relevantApplicationCount: number;
   topMatchedKeywords: string[];
+  topDirectKeywords?: string[];
+  topContextKeywords?: string[];
   averageJobValue?: string;
   capacityPerMonth?: string;
   closeRate?: string;
@@ -88,22 +90,24 @@ function buildCompetitorSummary(input: ReportCopyInput) {
 }
 
 function buildPlanningSummary(input: ReportCopyInput) {
-  if (input.planningStatus === "error") {
-    return "Planning activity data is unavailable/pending access for this report. Treat the planning layer as incomplete rather than weak demand.";
+  if (input.planningStatus === "error" || input.planningStatus === "unavailable") {
+    return "Planning activity data is unavailable/pending access. Treat this layer as incomplete rather than weak demand.";
   }
 
   if (input.planningStatus === "no_results") {
     return "No matching recent planning applications were found from the available scan. Treat this as limited planning context, not evidence of low homeowner demand.";
   }
 
+  const keywords =
+    input.topDirectKeywords && input.topDirectKeywords.length > 0
+      ? input.topDirectKeywords
+      : input.topMatchedKeywords;
   const keywordText =
-    input.topMatchedKeywords.length > 0
-      ? ` Top matched keywords included ${input.topMatchedKeywords.join(", ")}.`
+    keywords.length > 0
+      ? ` Recently updated records included ${keywords.join(", ")}.`
       : "";
 
-  return `Planning scan: ${input.relevantApplicationCount} relevant recent application signal${
-    input.relevantApplicationCount === 1 ? "" : "s"
-  }.${keywordText} Supporting context only, not a forecast.`;
+  return `NSW DA/CDC planning activity found.${keywordText} This is a planning activity signal, not guaranteed homeowner demand.`;
 }
 
 function buildRevenueScenario(input: ReportCopyInput) {
@@ -160,7 +164,14 @@ function buildMainBottleneck(input: ReportCopyInput) {
   }
   if (input.competitorStatus !== "success") return "Competitor scan pending";
   if (input.competitorCount >= 12) return "Competitor-heavy region";
-  if (input.planningStatus !== "success") return "Planning/property data pending";
+  if (
+    input.planningStatus !== "success" &&
+    input.competitorCount < 6 &&
+    input.preferredJobTypes &&
+    input.preferredJobTypes.length > 0
+  ) {
+    return "Planning/property data pending";
+  }
   if (!input.preferredJobTypes || input.preferredJobTypes.length === 0) {
     return "Needs clearer job-type targeting";
   }
@@ -219,7 +230,7 @@ function buildScoreBreakdownSummary(
   const planningData =
     input.planningStatus === "success"
       ? "Available"
-      : input.planningStatus === "error"
+      : input.planningStatus === "error" || input.planningStatus === "unavailable"
         ? "Pending"
         : "Incomplete";
 
