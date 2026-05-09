@@ -1,15 +1,30 @@
+import fs from "fs";
+import path from "path";
+
 type NswPropertySalesSignalsInput = {
   serviceArea: string;
 };
 
 export type NswPropertySalesSignalsResult = {
   source: "nsw_property_sales";
-  status: "success" | "error" | "unavailable";
+  status: "success" | "error" | "unavailable" | "no_results";
   serviceArea: string;
+  salesCount?: number;
+  medianSalePrice?: number;
+  earliestContractDate?: string;
+  latestContractDate?: string;
+  earliestSettlementDate?: string;
+  latestSettlementDate?: string;
+  propertyTurnoverSignal?: "low" | "moderate" | "strong";
+  dataBasis?: string;
   summary: {
     propertyTurnoverSignal: "low" | "moderate" | "strong" | "pending";
-    recentSalesCount?: number;
+    salesCount?: number;
     medianSalePrice?: number;
+    earliestContractDate?: string;
+    latestContractDate?: string;
+    earliestSettlementDate?: string;
+    latestSettlementDate?: string;
   };
   notes: string[];
   error?: string;
@@ -46,8 +61,29 @@ export type NswPropertySalesAggregate = {
   toDate?: string;
 };
 
-const NSW_VALUER_GENERAL_BULK_PSI_URL =
-  "https://www.valuergeneral.nsw.gov.au/design/bulk_psi_content/bulk_psi";
+type NswPropertySalesCacheSuburbSummary = {
+  salesCount: number;
+  medianSalePrice: number;
+  earliestContractDate: string;
+  latestContractDate: string;
+  earliestSettlementDate: string;
+  latestSettlementDate: string;
+  propertyTurnoverSignal: "low" | "moderate" | "strong";
+  sampleSize: number;
+};
+
+type NswPropertySalesCache = {
+  source: "nsw_property_sales";
+  generatedAt: string;
+  dataBasis: string;
+  suburbs: Record<string, NswPropertySalesCacheSuburbSummary>;
+};
+
+const NSW_PROPERTY_SALES_CACHE_PATH = path.join(
+  process.cwd(),
+  "data-cache",
+  "nsw-property-sales-summary.json",
+);
 
 function buildResult(
   status: NswPropertySalesSignalsResult["status"],
@@ -64,6 +100,40 @@ function buildResult(
     },
     notes,
     ...(error ? { error } : {}),
+  };
+}
+
+function buildSuccessResult(input: {
+  serviceArea: string;
+  dataBasis: string;
+  suburbSummary: NswPropertySalesCacheSuburbSummary;
+}): NswPropertySalesSignalsResult {
+  return {
+    source: "nsw_property_sales",
+    status: "success",
+    serviceArea: input.serviceArea,
+    salesCount: input.suburbSummary.salesCount,
+    medianSalePrice: input.suburbSummary.medianSalePrice,
+    earliestContractDate: input.suburbSummary.earliestContractDate,
+    latestContractDate: input.suburbSummary.latestContractDate,
+    earliestSettlementDate: input.suburbSummary.earliestSettlementDate,
+    latestSettlementDate: input.suburbSummary.latestSettlementDate,
+    propertyTurnoverSignal: input.suburbSummary.propertyTurnoverSignal,
+    dataBasis: input.dataBasis,
+    summary: {
+      propertyTurnoverSignal: input.suburbSummary.propertyTurnoverSignal,
+      salesCount: input.suburbSummary.salesCount,
+      medianSalePrice: input.suburbSummary.medianSalePrice,
+      earliestContractDate: input.suburbSummary.earliestContractDate,
+      latestContractDate: input.suburbSummary.latestContractDate,
+      earliestSettlementDate: input.suburbSummary.earliestSettlementDate,
+      latestSettlementDate: input.suburbSummary.latestSettlementDate,
+    },
+    notes: [
+      "Official NSW Valuer General PSI cache found for this suburb.",
+      "Property turnover is a renovation-trigger proxy, not guaranteed renovation demand.",
+      "No full addresses are returned by this cache-backed signal.",
+    ],
   };
 }
 
@@ -96,22 +166,9 @@ function median(values: number[]) {
 }
 
 function getTurnoverSignal(count: number) {
-  if (count >= 100) return "strong";
-  if (count >= 30) return "moderate";
+  if (count >= 21) return "strong";
+  if (count >= 6) return "moderate";
   return "low";
-}
-
-function extractPsiZipUrls(html: string) {
-  const urls = new Set<string>();
-  const regex =
-    /https:\/\/www\.valuergeneral\.nsw\.gov\.au\/__psi\/(?:weekly|yearly)\/[0-9]+\.zip/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(html)) !== null) {
-    urls.add(match[0]);
-  }
-
-  return [...urls];
 }
 
 export function parseNswPsiDat(content: string): NswPsiSaleRow[] {
@@ -193,38 +250,38 @@ export async function getNswPropertySalesSignals(
   input: NswPropertySalesSignalsInput,
 ): Promise<NswPropertySalesSignalsResult> {
   const serviceArea = input.serviceArea.trim();
+  const suburbKey = normaliseArea(serviceArea);
 
   try {
-    const response = await fetch(NSW_VALUER_GENERAL_BULK_PSI_URL, {
-      headers: { Accept: "text/html" },
-    });
-    const html = await response.text().catch(() => "");
-    const psiZipUrls = response.ok ? extractPsiZipUrls(html) : [];
-    const latestWeeklyUrl = psiZipUrls.find((url) => url.includes("/weekly/"));
-
-    if (!response.ok) {
+    if (!fs.existsSync(NSW_PROPERTY_SALES_CACHE_PATH)) {
       return buildResult(
         "unavailable",
         serviceArea,
         [
-          "Official NSW Valuer General bulk PSI page was checked, but it was not reachable in this request.",
-          "Parser and aggregation utilities are available for official Valuer General .DAT files once a scheduled download/cache step is added.",
-          `Valuer General bulk PSI access should be reviewed at ${NSW_VALUER_GENERAL_BULK_PSI_URL}.`,
+          "NSW property-sales cache is not available locally yet.",
+          "Build data-cache/nsw-property-sales-summary.json from official NSW Valuer General PSI .DAT files before using this signal.",
           "Unavailable property-sales data should be treated as pending, not as low property turnover.",
         ],
-        `NSW Valuer General bulk PSI request returned ${response.status}.`,
       );
     }
 
-    return buildResult("unavailable", serviceArea, [
-      `Official NSW Valuer General bulk PSI page is reachable and ${psiZipUrls.length} ZIP link${psiZipUrls.length === 1 ? " was" : "s were"} discovered.`,
-      latestWeeklyUrl
-        ? `Latest discovered weekly PSI ZIP: ${latestWeeklyUrl}.`
-        : "No weekly PSI ZIP URL was discovered in this request.",
-      "Parser and aggregation utilities are available for official Valuer General .DAT files once a scheduled download/cache step is added.",
-      "A future implementation should use official Valuer General PSI data or another licensed official feed, then aggregate recent sales count and median price by mapped service area.",
-      "Unavailable property-sales data should be treated as pending, not as low property turnover.",
-    ]);
+    const cache = JSON.parse(
+      fs.readFileSync(NSW_PROPERTY_SALES_CACHE_PATH, "utf8"),
+    ) as NswPropertySalesCache;
+    const suburbSummary = cache.suburbs?.[suburbKey];
+
+    if (!suburbSummary) {
+      return buildResult("no_results", serviceArea, [
+        `NSW property-sales cache is available, but no suburb summary was found for ${suburbKey}.`,
+        "Missing suburb data should be treated as incomplete coverage, not as low property turnover.",
+      ]);
+    }
+
+    return buildSuccessResult({
+      serviceArea,
+      dataBasis: cache.dataBasis,
+      suburbSummary,
+    });
   } catch (error) {
     return buildResult(
       "error",
@@ -240,28 +297,6 @@ export async function getNswPropertySalesSignals(
   }
 }
 
-// TODO: Connect official NSW property-sales data when a clean access path is
-// available.
-// Required official source:
-// - NSW Valuer General Property Sales Information (PSI), official bulk/licensed
-//   access, or an official NSW data endpoint that allows suburb/service-area
-//   aggregation.
-// Current foundation:
-// - parseNswPsiDat parses official 2001-current .DAT sale rows (B records).
-// - aggregateNswPropertySalesRows calculates matched sale count, median sale
-//   price and a turnover signal for already-downloaded official PSI rows.
-// - next step is a scheduled job/cache that downloads weekly/yearly ZIP files
-//   from the official Valuer General bulk PSI page, extracts .DAT files, parses
-//   B records, and stores a queryable service-area index.
-// Required fields:
-// - recent sales count over a defined window
-// - median sale price for residential property
-// - property type where available, so non-residential sales can be excluded
-// - service-area/suburb mapping confidence
-// Report value:
-// - helps DirectBuild understand residential turnover and likely homeowner
-//   decision activity before activation.
-// Important:
-// - if sales data is unavailable, gated, bulk-only, or unmapped, do not treat it
-//   as low demand. Keep it pending/unavailable until real official data is
-//   returned.
+// This datasource intentionally reads a local summary cache only. Raw Valuer
+// General PSI ZIP/.DAT files stay outside git and are reduced to suburb-level
+// counts before the app reads them.

@@ -16,6 +16,11 @@
 # local data imports
 data/*
 !data/.gitkeep
+data/**/*.DAT
+data/**/*.dat
+data/**/*.zip
+data-cache/*.json
+!data-cache/.gitkeep
 
 # next.js
 /.next/
