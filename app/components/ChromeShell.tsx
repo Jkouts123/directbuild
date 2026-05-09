@@ -15,6 +15,16 @@ export default function ChromeShell({
     pathname === "/joinus" ||
     pathname.startsWith("/joinus/");
 
+  const isStandaloneApp = pathname === "/clockworkcarpentry";
+
+  if (isStandaloneApp) {
+    return (
+      <main className="flex-1 min-h-[100dvh] bg-black-deep text-white">
+        {children}
+      </main>
+    );
+  }
+
   if (isStandaloneDoc) {
     return (
       <main className="flex-1 bg-white text-slate-900 min-h-[100dvh]">
