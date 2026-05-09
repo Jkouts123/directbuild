@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { createClient } from "@supabase/supabase-js";
 
 type NswPropertySalesSignalsInput = {
   serviceArea: string;
@@ -25,6 +26,7 @@ export type NswPropertySalesSignalsResult = {
     latestContractDate?: string;
     earliestSettlementDate?: string;
     latestSettlementDate?: string;
+    sampleSize?: number;
   };
   notes: string[];
   error?: string;
@@ -72,6 +74,21 @@ type NswPropertySalesCacheSuburbSummary = {
   sampleSize: number;
 };
 
+type NswPropertySalesSupabaseRow = {
+  suburb: string;
+  state: string;
+  sales_count: number;
+  median_sale_price: number | string | null;
+  earliest_contract_date: string | null;
+  latest_contract_date: string | null;
+  earliest_settlement_date: string | null;
+  latest_settlement_date: string | null;
+  property_turnover_signal: "low" | "moderate" | "strong" | null;
+  sample_size: number;
+  generated_at: string | null;
+  data_basis: string | null;
+};
+
 type NswPropertySalesCache = {
   source: "nsw_property_sales";
   generatedAt: string;
@@ -107,6 +124,7 @@ function buildSuccessResult(input: {
   serviceArea: string;
   dataBasis: string;
   suburbSummary: NswPropertySalesCacheSuburbSummary;
+  storage: "Supabase" | "local cache";
 }): NswPropertySalesSignalsResult {
   return {
     source: "nsw_property_sales",
@@ -128,9 +146,10 @@ function buildSuccessResult(input: {
       latestContractDate: input.suburbSummary.latestContractDate,
       earliestSettlementDate: input.suburbSummary.earliestSettlementDate,
       latestSettlementDate: input.suburbSummary.latestSettlementDate,
+      sampleSize: input.suburbSummary.sampleSize,
     },
     notes: [
-      "Official NSW Valuer General PSI cache found for this suburb.",
+      `Official NSW Valuer General PSI suburb summary found in ${input.storage}.`,
       "Property turnover is a renovation-trigger proxy, not guaranteed renovation demand.",
       "No full addresses are returned by this cache-backed signal.",
     ],
@@ -169,6 +188,111 @@ function getTurnoverSignal(count: number) {
   if (count >= 21) return "strong";
   if (count >= 6) return "moderate";
   return "low";
+}
+
+function parseMaybeNumber(value: number | string | null) {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return 0;
+
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function cleanDate(value: string | null | undefined) {
+  return value || "";
+}
+
+function mapSupabaseRowToSummary(
+  row: NswPropertySalesSupabaseRow,
+): NswPropertySalesCacheSuburbSummary {
+  return {
+    salesCount: row.sales_count,
+    medianSalePrice: parseMaybeNumber(row.median_sale_price),
+    earliestContractDate: cleanDate(row.earliest_contract_date),
+    latestContractDate: cleanDate(row.latest_contract_date),
+    earliestSettlementDate: cleanDate(row.earliest_settlement_date),
+    latestSettlementDate: cleanDate(row.latest_settlement_date),
+    propertyTurnoverSignal:
+      row.property_turnover_signal || getTurnoverSignal(row.sales_count),
+    sampleSize: row.sample_size,
+  };
+}
+
+async function getSupabaseSuburbSummary(suburbKey: string) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return {
+      status: "not_configured" as const,
+      note:
+        "Supabase NSW property-sales storage is not configured in this environment.",
+    };
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+  const { data, error } = await supabase
+    .from("nsw_property_sales_suburb_summary")
+    .select(
+      "suburb,state,sales_count,median_sale_price,earliest_contract_date,latest_contract_date,earliest_settlement_date,latest_settlement_date,property_turnover_signal,sample_size,generated_at,data_basis",
+    )
+    .eq("suburb", suburbKey)
+    .maybeSingle<NswPropertySalesSupabaseRow>();
+
+  if (error) {
+    return {
+      status: "error" as const,
+      note: `Supabase NSW property-sales lookup failed: ${error.message}`,
+    };
+  }
+
+  if (!data) {
+    return {
+      status: "not_found" as const,
+      note: `Supabase NSW property-sales storage has no row for ${suburbKey}.`,
+    };
+  }
+
+  return {
+    status: "success" as const,
+    dataBasis:
+      data.data_basis ||
+      "Official NSW Valuer General Property Sales Information suburb summary stored in Supabase.",
+    suburbSummary: mapSupabaseRowToSummary(data),
+  };
+}
+
+function getLocalCacheSuburbSummary(suburbKey: string) {
+  if (!fs.existsSync(NSW_PROPERTY_SALES_CACHE_PATH)) {
+    return {
+      status: "missing_cache" as const,
+      note:
+        "Local NSW property-sales cache is not available at data-cache/nsw-property-sales-summary.json.",
+    };
+  }
+
+  const cache = JSON.parse(
+    fs.readFileSync(NSW_PROPERTY_SALES_CACHE_PATH, "utf8"),
+  ) as NswPropertySalesCache;
+  const suburbSummary = cache.suburbs?.[suburbKey];
+
+  if (!suburbSummary) {
+    return {
+      status: "not_found" as const,
+      note: `Local NSW property-sales cache has no suburb summary for ${suburbKey}.`,
+    };
+  }
+
+  return {
+    status: "success" as const,
+    dataBasis: cache.dataBasis,
+    suburbSummary,
+  };
 }
 
 export function parseNswPsiDat(content: string): NswPsiSaleRow[] {
@@ -253,35 +377,66 @@ export async function getNswPropertySalesSignals(
   const suburbKey = normaliseArea(serviceArea);
 
   try {
-    if (!fs.existsSync(NSW_PROPERTY_SALES_CACHE_PATH)) {
+    const notes: string[] = [];
+    const supabaseResult = await getSupabaseSuburbSummary(suburbKey);
+
+    if (supabaseResult.status === "success") {
+      return buildSuccessResult({
+        serviceArea,
+        dataBasis: supabaseResult.dataBasis,
+        suburbSummary: supabaseResult.suburbSummary,
+        storage: "Supabase",
+      });
+    }
+
+    notes.push(supabaseResult.note);
+
+    const localCacheResult = getLocalCacheSuburbSummary(suburbKey);
+
+    if (localCacheResult.status === "success") {
+      const result = buildSuccessResult({
+        serviceArea,
+        dataBasis: localCacheResult.dataBasis,
+        suburbSummary: localCacheResult.suburbSummary,
+        storage: "local cache",
+      });
+
+      return {
+        ...result,
+        notes: [...notes, ...result.notes],
+      };
+    }
+
+    notes.push(localCacheResult.note);
+
+    if (
+      supabaseResult.status === "not_configured" &&
+      localCacheResult.status === "missing_cache"
+    ) {
       return buildResult(
         "unavailable",
         serviceArea,
         [
-          "NSW property-sales cache is not available locally yet.",
-          "Build data-cache/nsw-property-sales-summary.json from official NSW Valuer General PSI .DAT files before using this signal.",
+          ...notes,
+          "Configure Supabase or build data-cache/nsw-property-sales-summary.json from official NSW Valuer General PSI .DAT files before using this signal.",
           "Unavailable property-sales data should be treated as pending, not as low property turnover.",
         ],
       );
     }
 
-    const cache = JSON.parse(
-      fs.readFileSync(NSW_PROPERTY_SALES_CACHE_PATH, "utf8"),
-    ) as NswPropertySalesCache;
-    const suburbSummary = cache.suburbs?.[suburbKey];
-
-    if (!suburbSummary) {
-      return buildResult("no_results", serviceArea, [
-        `NSW property-sales cache is available, but no suburb summary was found for ${suburbKey}.`,
-        "Missing suburb data should be treated as incomplete coverage, not as low property turnover.",
+    if (supabaseResult.status === "error" && localCacheResult.status === "missing_cache") {
+      return buildResult("unavailable", serviceArea, [
+        ...notes,
+        "Supabase lookup failed and no local cache was available.",
+        "Unavailable property-sales data should be treated as pending, not as low property turnover.",
       ]);
     }
 
-    return buildSuccessResult({
-      serviceArea,
-      dataBasis: cache.dataBasis,
-      suburbSummary,
-    });
+    return buildResult("no_results", serviceArea, [
+      ...notes,
+      `No NSW property-sales suburb summary was found for ${suburbKey}.`,
+      "Missing suburb data should be treated as incomplete coverage, not as low property turnover.",
+    ]);
   } catch (error) {
     return buildResult(
       "error",
