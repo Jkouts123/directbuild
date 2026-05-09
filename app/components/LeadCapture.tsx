@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { User, Phone, Mail, ArrowRight, ArrowLeft, ShieldCheck } from "lucide-react";
-import PhoneVerify from "./PhoneVerify";
 import SampleQuotePreview from "./SampleQuotePreview";
 import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
+
+const PhoneVerify = dynamic(() => import("./PhoneVerify"), {
+  ssr: false,
+});
 
 interface LeadCaptureProps {
   firstName: string;

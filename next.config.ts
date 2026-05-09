@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      // Raise the Server Actions body limit so estimator submissions with
+      // multiple compressed photo data URIs aren't rejected with the
+      // default 1MB limit.
+      bodySizeLimit: "4mb",
+    },
+  },
 };
 
 export default nextConfig;
