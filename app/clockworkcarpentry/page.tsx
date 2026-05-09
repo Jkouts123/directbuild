@@ -13,6 +13,7 @@ import {
   Hammer,
   HardHat,
   House,
+  ImageSquare,
   Info,
   ListChecks,
   MagnifyingGlass,
@@ -56,12 +57,15 @@ type StepKind =
   | "contact"
   | "suburb";
 
+type StepImageMap = Record<string, { src: string; alt?: string }>;
+
 type Step = {
   id: string;
   kind: StepKind;
   title: string;
   hint?: string;
   options?: string[];
+  images?: StepImageMap;
   placeholder?: string;
   optional?: boolean;
 };
@@ -96,21 +100,66 @@ type QuoteResult = {
   next_step: string;
 };
 
-type ProjectType = { id: BranchKey; label: string; icon: PhosphorIcon };
+type ProjectType = {
+  id: BranchKey;
+  label: string;
+  icon: PhosphorIcon;
+  imageSrc?: string;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Project type entry options
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PROJECT_TYPES: ProjectType[] = [
-  { id: "deck", label: "Deck or outdoor entertaining area", icon: Stack },
-  { id: "pergola", label: "Pergola / covered outdoor area", icon: Sun },
-  { id: "screen", label: "Timber screen or feature wall", icon: SquaresFour },
-  { id: "cladding", label: "Cladding / facade upgrade", icon: Buildings },
-  { id: "fitout", label: "Internal fit-out / feature room", icon: House },
-  { id: "framing", label: "Framing or renovation carpentry", icon: Hammer },
-  { id: "builder", label: "I'm a builder looking for a carpentry crew", icon: HardHat },
-  { id: "unsure", label: "Not sure yet", icon: Question },
+  {
+    id: "deck",
+    label: "Deck or outdoor entertaining area",
+    icon: Stack,
+    imageSrc: "/clockworkcarpentry/deck-outdoor-area.jpg",
+  },
+  {
+    id: "pergola",
+    label: "Pergola / covered outdoor area",
+    icon: Sun,
+    imageSrc: "/clockworkcarpentry/pergola-covered-area.jpg",
+  },
+  {
+    id: "screen",
+    label: "Timber screen or feature wall",
+    icon: SquaresFour,
+    imageSrc: "/clockworkcarpentry/timber-screen-feature-wall.jpg",
+  },
+  {
+    id: "cladding",
+    label: "Cladding / facade upgrade",
+    icon: Buildings,
+    imageSrc: "/clockworkcarpentry/cladding-facade-upgrade.jpg",
+  },
+  {
+    id: "fitout",
+    label: "Internal fit-out / feature room",
+    icon: House,
+    imageSrc: "/clockworkcarpentry/internal-fitout-feature-room.jpg",
+  },
+  {
+    id: "framing",
+    label: "Framing or renovation carpentry",
+    icon: Hammer,
+    imageSrc: "/clockworkcarpentry/framing-renovation-carpentry.jpg",
+  },
+  {
+    id: "builder",
+    label: "I'm a builder looking for a carpentry crew",
+    icon: HardHat,
+    imageSrc: "/clockworkcarpentry/builder-looking-for-crew.jpg",
+  },
+  {
+    id: "unsure",
+    label: "Not sure yet",
+    icon: Question,
+    imageSrc: "/clockworkcarpentry/not-sure-yet.jpg",
+  },
 ];
 
 const PROJECT_TYPES_STEP: Step = {
@@ -150,6 +199,24 @@ const BRANCH_STEPS: Record<BranchKey, Step[]> = {
         "Waterfront / difficult site",
         "Not sure",
       ],
+      images: {
+        "Ground level": {
+          src: "/clockworkcarpentry/deck-complexity-ground-level.jpg",
+          alt: "Ground-level deck",
+        },
+        "Raised deck": {
+          src: "/clockworkcarpentry/deck-complexity-raised.jpg",
+          alt: "Raised deck",
+        },
+        "Around pool": {
+          src: "/clockworkcarpentry/deck-complexity-around-pool.jpg",
+          alt: "Pool-side deck",
+        },
+        "Waterfront / difficult site": {
+          src: "/clockworkcarpentry/deck-complexity-waterfront.jpg",
+          alt: "Waterfront deck",
+        },
+      },
     },
     {
       id: "deck_finish",
@@ -162,6 +229,24 @@ const BRANCH_STEPS: Record<BranchKey, Step[]> = {
         "Premium / architectural finish",
         "Not sure",
       ],
+      images: {
+        "Treated pine": {
+          src: "/clockworkcarpentry/deck-finish-treated-pine.jpg",
+          alt: "Treated pine decking",
+        },
+        Hardwood: {
+          src: "/clockworkcarpentry/deck-finish-hardwood.jpg",
+          alt: "Hardwood decking",
+        },
+        Composite: {
+          src: "/clockworkcarpentry/deck-finish-composite.jpg",
+          alt: "Composite decking",
+        },
+        "Premium / architectural finish": {
+          src: "/clockworkcarpentry/deck-finish-premium.jpg",
+          alt: "Premium architectural deck finish",
+        },
+      },
     },
     {
       id: "deck_extras",
@@ -203,6 +288,24 @@ const BRANCH_STEPS: Record<BranchKey, Step[]> = {
         "New deck underneath",
         "Not sure",
       ],
+      images: {
+        "Attached to house": {
+          src: "/clockworkcarpentry/pergola-structure-attached.jpg",
+          alt: "Pergola attached to house",
+        },
+        Freestanding: {
+          src: "/clockworkcarpentry/pergola-structure-freestanding.jpg",
+          alt: "Freestanding pergola",
+        },
+        "Over existing deck / paving": {
+          src: "/clockworkcarpentry/pergola-structure-over-existing.jpg",
+          alt: "Pergola over existing deck or paving",
+        },
+        "New deck underneath": {
+          src: "/clockworkcarpentry/pergola-structure-new-deck.jpg",
+          alt: "Pergola with new deck underneath",
+        },
+      },
     },
     {
       id: "pergola_roof",
@@ -215,6 +318,24 @@ const BRANCH_STEPS: Record<BranchKey, Step[]> = {
         "Insulated roof",
         "Not sure",
       ],
+      images: {
+        "Open pergola": {
+          src: "/clockworkcarpentry/pergola-roof-open.jpg",
+          alt: "Open pergola roof",
+        },
+        "Polycarbonate / clear roof": {
+          src: "/clockworkcarpentry/pergola-roof-polycarb.jpg",
+          alt: "Polycarbonate clear roof",
+        },
+        "Metal roof": {
+          src: "/clockworkcarpentry/pergola-roof-metal.jpg",
+          alt: "Metal pergola roof",
+        },
+        "Insulated roof": {
+          src: "/clockworkcarpentry/pergola-roof-insulated.jpg",
+          alt: "Insulated pergola roof",
+        },
+      },
     },
     {
       id: "pergola_extras",
@@ -300,6 +421,24 @@ const BRANCH_STEPS: Record<BranchKey, Step[]> = {
         "Premium feature finish",
         "Not sure",
       ],
+      images: {
+        "Timber cladding": {
+          src: "/clockworkcarpentry/cladding-material-timber.jpg",
+          alt: "Timber cladding",
+        },
+        "Composite cladding": {
+          src: "/clockworkcarpentry/cladding-material-composite.jpg",
+          alt: "Composite cladding",
+        },
+        "Fibre cement / architectural cladding": {
+          src: "/clockworkcarpentry/cladding-material-fibrecement.jpg",
+          alt: "Fibre cement architectural cladding",
+        },
+        "Premium feature finish": {
+          src: "/clockworkcarpentry/cladding-material-premium.jpg",
+          alt: "Premium feature cladding finish",
+        },
+      },
     },
     {
       id: "cladding_access",
@@ -349,6 +488,24 @@ const BRANCH_STEPS: Record<BranchKey, Step[]> = {
         "Multi-room upgrade",
         "Not sure",
       ],
+      images: {
+        "Feature wall only": {
+          src: "/clockworkcarpentry/fitout-scope-feature-wall.jpg",
+          alt: "Feature wall fit-out",
+        },
+        "Joinery / detailing": {
+          src: "/clockworkcarpentry/fitout-scope-joinery.jpg",
+          alt: "Joinery and detailing",
+        },
+        "Full room fit-out": {
+          src: "/clockworkcarpentry/fitout-scope-full-room.jpg",
+          alt: "Full room fit-out",
+        },
+        "Multi-room upgrade": {
+          src: "/clockworkcarpentry/fitout-scope-multi-room.jpg",
+          alt: "Multi-room upgrade",
+        },
+      },
     },
     {
       id: "fitout_finish",
@@ -361,6 +518,24 @@ const BRANCH_STEPS: Record<BranchKey, Step[]> = {
         "Architectural / detail-heavy",
         "Not sure",
       ],
+      images: {
+        Standard: {
+          src: "/clockworkcarpentry/fitout-finish-standard.jpg",
+          alt: "Standard fit-out finish",
+        },
+        "Mid-range": {
+          src: "/clockworkcarpentry/fitout-finish-midrange.jpg",
+          alt: "Mid-range fit-out finish",
+        },
+        Premium: {
+          src: "/clockworkcarpentry/fitout-finish-premium.jpg",
+          alt: "Premium fit-out finish",
+        },
+        "Architectural / detail-heavy": {
+          src: "/clockworkcarpentry/fitout-finish-architectural.jpg",
+          alt: "Architectural detail-heavy fit-out",
+        },
+      },
     },
     {
       id: "fitout_trades",
@@ -1672,13 +1847,23 @@ function ProjectTypesStep({
                 >
                   <span
                     className={[
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
-                      isSelected
-                        ? "bg-orange-safety text-black-deep"
-                        : "bg-orange-safety/10 text-orange-safety group-hover:bg-orange-safety/20",
+                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-colors",
+                      opt.imageSrc
+                        ? "bg-gray-light/40"
+                        : isSelected
+                          ? "bg-orange-safety text-black-deep"
+                          : "bg-orange-safety/10 text-orange-safety group-hover:bg-orange-safety/20",
                     ].join(" ")}
                   >
-                    <opt.icon size={20} weight="duotone" />
+                    {opt.imageSrc ? (
+                      <OptionImage
+                        src={opt.imageSrc}
+                        alt={opt.label}
+                        className="h-full w-full"
+                      />
+                    ) : (
+                      <opt.icon size={20} weight="duotone" />
+                    )}
                   </span>
                   <span className="flex-1 text-sm sm:text-base font-medium text-white">
                     {opt.label}
@@ -1740,6 +1925,7 @@ function DynamicStep({
         <SingleSelectStep
           stepId={step.id}
           options={step.options}
+          images={step.images}
           value={answers[step.id] as string | undefined}
           onSelect={onSingleSelect}
         />
@@ -1810,6 +1996,54 @@ function DynamicStep({
 // Step kind components
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Image used inside option cards. Falls back to a brand-tinted placeholder
+// when the file is missing — keeps card layout intact.
+function OptionImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className: string;
+}) {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return (
+      <div
+        className={`${className} bg-gradient-to-br from-orange-safety/15 to-gray-light/40 grid place-items-center text-orange-safety/40`}
+        aria-hidden
+      >
+        <ImageSquare size={16} weight="duotone" />
+      </div>
+    );
+  }
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setErrored(true)}
+      className={`${className} object-cover`}
+      loading="lazy"
+      decoding="async"
+    />
+  );
+}
+
+// Empty placeholder for option cards in image-enabled steps where a specific
+// option (e.g. "Not sure") doesn't have an image.
+function OptionImagePlaceholder({ className }: { className: string }) {
+  return (
+    <div
+      className={`${className} bg-gradient-to-br from-orange-safety/10 to-gray-light/40 grid place-items-center text-orange-safety/40`}
+      aria-hidden
+    >
+      <ImageSquare size={16} weight="duotone" />
+    </div>
+  );
+}
+
 function StepHeader({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="mb-6">
@@ -1829,42 +2063,73 @@ function SingleSelectStep({
   stepId,
   options,
   value,
+  images,
   onSelect,
 }: {
   stepId: string;
   options: string[];
   value: string | undefined;
+  images?: StepImageMap;
   onSelect: (stepId: string, value: string) => void;
 }) {
+  const stepHasImages = !!images;
   return (
     <ul className="grid gap-2.5">
       {options.map((opt) => {
         const isSelected = value === opt;
+        const img = images?.[opt];
         return (
           <li key={opt}>
             <button
               type="button"
               onClick={() => onSelect(stepId, opt)}
               className={[
-                "group flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-colors min-h-[56px] cursor-pointer",
+                "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors cursor-pointer",
+                stepHasImages ? "min-h-[68px]" : "min-h-[56px] px-4 py-3.5",
                 isSelected
                   ? "border-2 border-orange-safety bg-orange-safety/10"
                   : "border border-gray-light bg-gray-mid hover:border-orange-safety/50",
               ].join(" ")}
             >
-              <span
-                className={[
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
-                  isSelected
-                    ? "border-orange-safety bg-orange-safety text-black-deep"
-                    : "border-gray-light bg-transparent text-transparent",
-                ].join(" ")}
-              >
-                <Check size={14} weight="bold" />
-              </span>
+              {stepHasImages ? (
+                img ? (
+                  <OptionImage
+                    src={img.src}
+                    alt={img.alt ?? opt}
+                    className="h-12 w-12 shrink-0 rounded-lg"
+                  />
+                ) : (
+                  <OptionImagePlaceholder className="h-12 w-12 shrink-0 rounded-lg" />
+                )
+              ) : (
+                <span
+                  className={[
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
+                    isSelected
+                      ? "border-orange-safety bg-orange-safety text-black-deep"
+                      : "border-gray-light bg-transparent text-transparent",
+                  ].join(" ")}
+                >
+                  <Check size={14} weight="bold" />
+                </span>
+              )}
+
               <span className="flex-1 text-sm sm:text-base font-medium text-white">
                 {opt}
               </span>
+
+              {stepHasImages && (
+                <span
+                  className={[
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
+                    isSelected
+                      ? "border-orange-safety bg-orange-safety text-black-deep"
+                      : "border-gray-light bg-transparent text-transparent",
+                  ].join(" ")}
+                >
+                  <Check size={14} weight="bold" />
+                </span>
+              )}
             </button>
           </li>
         );
