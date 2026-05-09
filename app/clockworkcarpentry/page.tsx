@@ -14,6 +14,7 @@ import {
   HardHat,
   House,
   Info,
+  ListChecks,
   MagnifyingGlass,
   MapPin,
   Phone,
@@ -79,10 +80,15 @@ type AnswerMap = Record<string, AnswerValue>;
 
 type Confidence = "low" | "medium" | "manual";
 
+type ItemisedLine = { label: string; amount: number; note: string };
+
 type QuoteResult = {
   range_low: number | null;
   range_high: number | null;
   display_range: string;
+  midpoint: number | null;
+  currency: "AUD";
+  itemised_breakdown: ItemisedLine[];
   confidence: Confidence;
   summary: string;
   cost_drivers: string[];
@@ -525,19 +531,11 @@ const SHARED_STEPS: Step[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Quote bases per branch
+// Per-branch metadata (cost drivers + next-step copy)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type QuoteBase = Omit<QuoteResult, "warnings">;
-
-const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
+const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string }> = {
   deck: {
-    range_low: 15000,
-    range_high: 60000,
-    display_range: "$15k – $60k+",
-    confidence: "medium",
-    summary:
-      "Most Sydney deck builds land between $15k and $60k+, depending on size, height off the ground and material grade.",
     cost_drivers: [
       "Deck size and height off the ground",
       "Material grade (treated pine vs hardwood vs composite)",
@@ -548,12 +546,6 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
       "We'll review your details and connect you with a vetted Sydney carpentry team for a real quote — no obligation.",
   },
   pergola: {
-    range_low: 12000,
-    range_high: 70000,
-    display_range: "$12k – $70k+",
-    confidence: "medium",
-    summary:
-      "Pergola and covered outdoor builds typically range $12k–$70k+, depending on roof type, structure and finish.",
     cost_drivers: [
       "Cover size and span",
       "Roof type (open, polycarbonate, metal, insulated)",
@@ -564,12 +556,6 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
       "We'll review your details and connect you with a vetted Sydney carpentry team for a real quote.",
   },
   screen: {
-    range_low: 5000,
-    range_high: 35000,
-    display_range: "$5k – $35k+",
-    confidence: "medium",
-    summary:
-      "Timber screens and feature walls typically range $5k–$35k+, depending on size, material and detail.",
     cost_drivers: [
       "Length and height of the screen",
       "Material grade and finish",
@@ -580,12 +566,6 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
       "We'll review your scope and respond with a tailored ballpark, or connect you with a Sydney carpentry team.",
   },
   cladding: {
-    range_low: 8000,
-    range_high: 50000,
-    display_range: "$8k – $50k+",
-    confidence: "medium",
-    summary:
-      "Facade and feature cladding typically lands between $8k and $50k+, depending on area, material and access.",
     cost_drivers: [
       "Wall area and storey count",
       "Material grade",
@@ -596,12 +576,6 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
       "We'll review your details and connect you with a Sydney carpentry team for a real cladding quote.",
   },
   fitout: {
-    range_low: 20000,
-    range_high: 150000,
-    display_range: "$20k – $150k+",
-    confidence: "low",
-    summary:
-      "Internal fit-outs and feature rooms vary widely — typically $20k–$150k+, depending on scope, joinery and finish level.",
     cost_drivers: [
       "Number of rooms and total scope",
       "Joinery, built-ins and detailing level",
@@ -612,12 +586,6 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
       "We'll review your scope and connect you with a Sydney carpentry team for a real quote.",
   },
   framing: {
-    range_low: null,
-    range_high: null,
-    display_range: "Reviewed manually — case by case",
-    confidence: "manual",
-    summary:
-      "Framing and renovation carpentry varies a lot. We review the scope manually and come back with a tailored ballpark, usually within one business day.",
     cost_drivers: [
       "Engineering and council approvals",
       "Project size and complexity",
@@ -628,12 +596,6 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
       "We'll review your project details and respond with a tailored ballpark range, usually within one business day.",
   },
   builder: {
-    range_low: null,
-    range_high: null,
-    display_range: "Manual review — crew matching",
-    confidence: "manual",
-    summary:
-      "We manually match builders with available carpentry crews. We'll review your project, timeline and delivery preferences and come back with options.",
     cost_drivers: [
       "Crew size and labour duration",
       "Project type and timeline",
@@ -644,12 +606,6 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
       "We'll review your details and come back with crew options that match your project type and timeline.",
   },
   unsure: {
-    range_low: null,
-    range_high: null,
-    display_range: "Manual review",
-    confidence: "manual",
-    summary:
-      "We'll review your rough idea and come back with the right scope and ballpark range, usually within one business day.",
     cost_drivers: [
       "Type of work and final scope",
       "Site access and conditions",
@@ -661,11 +617,422 @@ const QUOTE_BASE: Record<BranchKey, QuoteBase> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Quote builder — single + combined
+// Per-branch midpoint calculators
 // ─────────────────────────────────────────────────────────────────────────────
+
+function deckMidpoint(answers: AnswerMap): number {
+  let m = 32000;
+  switch (answers.deck_size) {
+    case "Small deck":
+      m = 18000;
+      break;
+    case "Standard entertaining area":
+      m = 30000;
+      break;
+    case "Large deck / multi-zone":
+      m = 50000;
+      break;
+    case "Poolside or waterfront deck":
+      m = 55000;
+      break;
+    case "Not sure":
+      m = 32000;
+      break;
+  }
+  switch (answers.deck_complexity) {
+    case "Raised deck":
+      m += 5000;
+      break;
+    case "Around pool":
+      m += 10000;
+      break;
+    case "Waterfront / difficult site":
+      m += 15000;
+      break;
+  }
+  switch (answers.deck_finish) {
+    case "Treated pine":
+      m -= 4000;
+      break;
+    case "Composite":
+      m += 8000;
+      break;
+    case "Premium / architectural finish":
+      m += 15000;
+      break;
+  }
+  const extras = Array.isArray(answers.deck_extras)
+    ? (answers.deck_extras as string[])
+    : [];
+  for (const extra of extras) {
+    switch (extra) {
+      case "Stairs":
+        m += 2000;
+        break;
+      case "Glass / balustrade":
+        m += 3000;
+        break;
+      case "Lighting":
+        m += 1000;
+        break;
+      case "Built-in seating":
+        m += 3000;
+        break;
+      case "Privacy screen":
+        m += 2000;
+        break;
+      case "Existing structure removal":
+        m += 3000;
+        break;
+    }
+  }
+  return Math.max(12000, m);
+}
+
+function pergolaMidpoint(answers: AnswerMap): number {
+  let m = 25000;
+  switch (answers.pergola_size) {
+    case "Small cover":
+      m = 12000;
+      break;
+    case "Standard outdoor area":
+      m = 22000;
+      break;
+    case "Large entertaining area":
+      m = 40000;
+      break;
+    case "Multi-zone":
+      m = 55000;
+      break;
+    case "Not sure":
+      m = 25000;
+      break;
+  }
+  switch (answers.pergola_structure) {
+    case "Freestanding":
+      m += 3000;
+      break;
+    case "New deck underneath":
+      m += 15000;
+      break;
+  }
+  switch (answers.pergola_roof) {
+    case "Polycarbonate / clear roof":
+      m += 3000;
+      break;
+    case "Metal roof":
+      m += 5000;
+      break;
+    case "Insulated roof":
+      m += 10000;
+      break;
+  }
+  const extras = Array.isArray(answers.pergola_extras)
+    ? (answers.pergola_extras as string[])
+    : [];
+  for (const extra of extras) {
+    switch (extra) {
+      case "Lighting":
+        m += 1000;
+        break;
+      case "Fan":
+        m += 1000;
+        break;
+      case "Privacy screen":
+        m += 2000;
+        break;
+      case "Decking underneath":
+        m += 10000;
+        break;
+      case "Paving underneath":
+        m += 8000;
+        break;
+      case "Existing structure removal":
+        m += 3000;
+        break;
+    }
+  }
+  return Math.max(10000, m);
+}
+
+function screenMidpoint(answers: AnswerMap): number {
+  let m = 12000;
+  switch (answers.screen_size) {
+    case "Small feature":
+      m = 8000;
+      break;
+    case "Medium screen / wall":
+      m = 14000;
+      break;
+    case "Large screen / wall":
+      m = 22000;
+      break;
+    case "Multi-area":
+      m = 28000;
+      break;
+    case "Not sure":
+      m = 14000;
+      break;
+  }
+  switch (answers.screen_finish) {
+    case "Premium timber":
+      m += 4000;
+      break;
+    case "Painted finish":
+      m += 1500;
+      break;
+    case "Custom pattern":
+      m += 6000;
+      break;
+  }
+  return Math.max(10000, m);
+}
+
+function claddingMidpoint(answers: AnswerMap): number {
+  let m = 22000;
+  switch (answers.cladding_size) {
+    case "Small feature area":
+      m = 11000;
+      break;
+    case "Front facade section":
+      m = 20000;
+      break;
+    case "Large wall / area":
+      m = 32000;
+      break;
+    case "Multiple areas":
+      m = 42000;
+      break;
+    case "Not sure":
+      m = 22000;
+      break;
+  }
+  switch (answers.cladding_material) {
+    case "Composite cladding":
+      m += 3000;
+      break;
+    case "Fibre cement / architectural cladding":
+      m -= 2000;
+      break;
+    case "Premium feature finish":
+      m += 10000;
+      break;
+  }
+  switch (answers.cladding_access) {
+    case "Single-storey height":
+      m += 2000;
+      break;
+    case "Two-storey height":
+      m += 8000;
+      break;
+    case "Difficult access":
+      m += 10000;
+      break;
+  }
+  switch (answers.cladding_existing) {
+    case "Existing cladding to remove":
+      m += 4000;
+      break;
+    case "Brick / render surface":
+      m += 2000;
+      break;
+  }
+  return Math.max(11000, m);
+}
+
+function fitoutMidpoint(answers: AnswerMap): number {
+  // "Feature wall only" overrides to a small base
+  if (answers.fitout_scope === "Feature wall only") {
+    let m = 12000;
+    switch (answers.fitout_finish) {
+      case "Standard":
+        m -= 2000;
+        break;
+      case "Premium":
+        m += 6000;
+        break;
+      case "Architectural / detail-heavy":
+        m += 10000;
+        break;
+    }
+    return Math.max(10000, m);
+  }
+
+  let m = 35000;
+  switch (answers.fitout_room) {
+    case "Living room":
+      m = 35000;
+      break;
+    case "Theatre / media room":
+      m = 50000;
+      break;
+    case "Bedroom / wardrobe":
+      m = 22000;
+      break;
+    case "Office / study":
+      m = 25000;
+      break;
+    case "Other feature room":
+      m = 35000;
+      break;
+  }
+  switch (answers.fitout_scope) {
+    case "Joinery / detailing":
+      break;
+    case "Full room fit-out":
+      m += 20000;
+      break;
+    case "Multi-room upgrade":
+      m += 50000;
+      break;
+  }
+  switch (answers.fitout_finish) {
+    case "Standard":
+      m -= 5000;
+      break;
+    case "Premium":
+      m += 15000;
+      break;
+    case "Architectural / detail-heavy":
+      m += 30000;
+      break;
+  }
+  const trades = Array.isArray(answers.fitout_trades)
+    ? (answers.fitout_trades as string[])
+    : [];
+  for (const t of trades) {
+    switch (t) {
+      case "Electrical":
+        m += 3000;
+        break;
+      case "Lighting":
+        m += 2000;
+        break;
+      case "Acoustic treatment":
+        m += 5000;
+        break;
+      case "Painting":
+        m += 2000;
+        break;
+      case "Other trades":
+        m += 3000;
+        break;
+    }
+  }
+  return Math.max(15000, m);
+}
+
+// Framing returns a midpoint only if enough useful answers were given.
+// Otherwise treated as manual review.
+function framingMidpoint(answers: AnswerMap): number | null {
+  const size = answers.framing_size;
+  if (typeof size !== "string" || size === "Not sure") return null;
+
+  let m: number;
+  switch (size) {
+    case "Small job":
+      m = 18000;
+      break;
+    case "Medium renovation":
+      m = 40000;
+      break;
+    case "Large renovation / extension":
+      m = 90000;
+      break;
+    case "Ongoing crew support":
+      m = 50000;
+      break;
+    default:
+      return null;
+  }
+  switch (answers.framing_project) {
+    case "Commercial fit-out":
+      m += 10000;
+      break;
+    case "New build":
+      m += 15000;
+      break;
+  }
+  switch (answers.framing_delivery) {
+    case "Supply and install":
+      m += 5000;
+      break;
+  }
+  return Math.max(15000, m);
+}
+
+function branchMidpoint(branch: BranchKey, answers: AnswerMap): number | null {
+  switch (branch) {
+    case "deck":
+      return deckMidpoint(answers);
+    case "pergola":
+      return pergolaMidpoint(answers);
+    case "screen":
+      return screenMidpoint(answers);
+    case "cladding":
+      return claddingMidpoint(answers);
+    case "fitout":
+      return fitoutMidpoint(answers);
+    case "framing":
+      return framingMidpoint(answers);
+    case "builder":
+      return null;
+    case "unsure":
+      return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quote builder (midpoint-based, fixed $10k display gap)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MIDPOINT_FLOOR = 10000;
+
+function roundToK(n: number): number {
+  return Math.round(n / 1000) * 1000;
+}
+
+function round500(n: number): number {
+  return Math.round(n / 500) * 500;
+}
 
 function formatK(amount: number): string {
   return `$${Math.round(amount / 1000)}k`;
+}
+
+function formatCurrency(amount: number): string {
+  return `$${amount.toLocaleString("en-AU")}`;
+}
+
+function buildItemisedBreakdown(midpoint: number): ItemisedLine[] {
+  const materials = round500(midpoint * 0.38);
+  const labour = round500(midpoint * 0.35);
+  const margin = round500(midpoint * 0.17);
+  // Contingency absorbs rounding so the four lines total exactly the midpoint.
+  const contingency = midpoint - materials - labour - margin;
+
+  return [
+    {
+      label: "Materials",
+      amount: materials,
+      note: "Timber, fixings, finishes and consumables.",
+    },
+    {
+      label: "Labour",
+      amount: labour,
+      note: "Skilled carpentry crew, prep and install.",
+    },
+    {
+      label: "Builder margin / overhead",
+      amount: margin,
+      note: "Project management, insurance and supervision.",
+    },
+    {
+      label: "Site complexity / contingency",
+      amount: contingency,
+      note: "Allowance for access, conditions and final scope shifts.",
+    },
+  ];
 }
 
 function deriveContextWarnings(answers: AnswerMap): string[] {
@@ -716,132 +1083,6 @@ function deriveContextWarnings(answers: AnswerMap): string[] {
   return warnings;
 }
 
-function buildSingleBranchQuote(
-  branch: BranchKey,
-  answers: AnswerMap,
-): QuoteResult {
-  const base = QUOTE_BASE[branch];
-  const warnings = deriveContextWarnings(answers);
-
-  if (
-    typeof answers.budget === "string" &&
-    answers.budget === "Under $10k" &&
-    base.range_low !== null &&
-    base.range_low > 10000
-  ) {
-    warnings.push(
-      "Your indicated budget is below typical project ranges in this category — scope may need to be reduced.",
-    );
-  }
-
-  if (base.confidence === "low") {
-    warnings.push(
-      "Wide range — pricing varies meaningfully with scope, finish level and joinery detail.",
-    );
-  }
-
-  if (base.confidence === "manual") {
-    warnings.push(
-      "We'll review your details manually and respond with a tailored ballpark, usually within one business day.",
-    );
-  }
-
-  return { ...base, warnings };
-}
-
-function buildCombinedQuote(
-  branchIds: BranchKey[],
-  answers: AnswerMap,
-): QuoteResult {
-  let lowSum = 0;
-  let highSum = 0;
-  let hasNumeric = false;
-  let hasManual = false;
-
-  const driverSet = new Set<string>();
-  const summaryParts: string[] = [];
-
-  for (const id of branchIds) {
-    const base = QUOTE_BASE[id];
-    if (base.range_low !== null && base.range_high !== null) {
-      lowSum += base.range_low;
-      highSum += base.range_high;
-      hasNumeric = true;
-      summaryParts.push(`${labelFor(id)} (${base.display_range})`);
-    } else {
-      hasManual = true;
-      summaryParts.push(`${labelFor(id)} — manual review`);
-    }
-    base.cost_drivers.forEach((d) => driverSet.add(d));
-  }
-
-  let display_range: string;
-  let range_low: number | null;
-  let range_high: number | null;
-  let confidence: Confidence;
-
-  if (hasNumeric && hasManual) {
-    display_range = `From ${formatK(lowSum)}+ — manual review recommended`;
-    range_low = lowSum;
-    range_high = null;
-    confidence = "manual";
-  } else if (hasNumeric) {
-    display_range = `${formatK(lowSum)} – ${formatK(highSum)}+`;
-    range_low = lowSum;
-    range_high = highSum;
-    confidence = "low"; // wider envelope when stacked
-  } else {
-    display_range = "Manual review recommended";
-    range_low = null;
-    range_high = null;
-    confidence = "manual";
-  }
-
-  const summary = `Your project combines ${summaryParts.join(
-    ", ",
-  )}. We've stacked the typical ranges so you can sanity-check the overall envelope before any site visit.`;
-
-  const warnings = deriveContextWarnings(answers);
-
-  if (
-    typeof answers.budget === "string" &&
-    answers.budget === "Under $10k" &&
-    range_low !== null &&
-    range_low > 10000
-  ) {
-    warnings.push(
-      "Your indicated budget is below the combined ranges for these scopes — you may need to phase the work or trim scope.",
-    );
-  }
-
-  if (confidence === "low") {
-    warnings.push(
-      "Combining multiple scopes widens the range — we'll tighten it once we see photos and confirm scope.",
-    );
-  }
-
-  if (hasManual) {
-    warnings.push(
-      "One or more selected scopes need manual review — we'll come back with a tailored ballpark, usually within one business day.",
-    );
-  }
-
-  const next_step = hasManual
-    ? "We'll review your scope manually and respond with a tailored ballpark, usually within one business day."
-    : "We'll review your details and connect you with a vetted Sydney carpentry team for a real quote.";
-
-  return {
-    range_low,
-    range_high,
-    display_range,
-    confidence,
-    summary,
-    cost_drivers: Array.from(driverSet),
-    warnings,
-    next_step,
-  };
-}
-
 function labelFor(id: BranchKey): string {
   return PROJECT_TYPES.find((p) => p.id === id)?.label ?? id;
 }
@@ -850,10 +1091,109 @@ function buildQuote(
   branchIds: BranchKey[],
   answers: AnswerMap,
 ): QuoteResult {
-  if (branchIds.length === 1) {
-    return buildSingleBranchQuote(branchIds[0], answers);
+  const numeric: { id: BranchKey; midpoint: number }[] = [];
+  const manualOnly: BranchKey[] = [];
+
+  for (const id of branchIds) {
+    const m = branchMidpoint(id, answers);
+    if (m === null) manualOnly.push(id);
+    else numeric.push({ id, midpoint: m });
   }
-  return buildCombinedQuote(branchIds, answers);
+
+  // Aggregate cost drivers from every selected branch (deduplicated).
+  const driverSet = new Set<string>();
+  for (const id of branchIds) {
+    for (const d of BRANCH_META[id].cost_drivers) driverSet.add(d);
+  }
+  const cost_drivers = Array.from(driverSet);
+
+  // ── All manual review ────────────────────────────────────────────────────
+  if (numeric.length === 0) {
+    const labels = branchIds.map(labelFor).join(", ");
+    const warnings = deriveContextWarnings(answers);
+    warnings.push(
+      "We'll review your details manually and respond with a tailored ballpark, usually within one business day.",
+    );
+    return {
+      range_low: null,
+      range_high: null,
+      display_range: "Manual review recommended",
+      midpoint: null,
+      currency: "AUD",
+      itemised_breakdown: [],
+      confidence: "manual",
+      summary: `${labels} needs manual review — we'll come back with a tailored ballpark, usually within one business day.`,
+      cost_drivers,
+      warnings,
+      next_step:
+        "We'll review your scope manually and respond with a tailored ballpark, usually within one business day.",
+    };
+  }
+
+  // ── Numeric (single or combined) ────────────────────────────────────────
+  const rawSum = numeric.reduce((s, x) => s + x.midpoint, 0);
+  const midpoint = Math.max(MIDPOINT_FLOOR, roundToK(rawSum));
+  const range_low = midpoint - 5000;
+  const range_high = midpoint + 5000;
+  const display_range = `${formatK(range_low)} – ${formatK(range_high)} AUD`;
+  const itemised_breakdown = buildItemisedBreakdown(midpoint);
+
+  const numericLabels = numeric.map((n) => labelFor(n.id));
+  const summaryHead =
+    numericLabels.length === 1
+      ? `Most Sydney ${numericLabels[0].toLowerCase()} builds at this configuration land near ${formatK(midpoint)} AUD.`
+      : `Combining ${numericLabels.join(", ")}: estimated near ${formatK(midpoint)} AUD.`;
+  const summaryTail =
+    " We've narrowed to a $10k range you can sanity-check before any site visit.";
+  let summary = summaryHead + summaryTail;
+
+  if (manualOnly.length > 0) {
+    const manualLabels = manualOnly.map(labelFor).join(", ");
+    summary += ` ${manualLabels} also selected — we'll review those manually.`;
+  }
+
+  const warnings = deriveContextWarnings(answers);
+
+  if (
+    typeof answers.budget === "string" &&
+    answers.budget === "Under $10k" &&
+    range_low > 10000
+  ) {
+    warnings.push(
+      "Your indicated budget is below this configuration's typical range — scope may need to be reduced.",
+    );
+  }
+
+  if (manualOnly.length > 0) {
+    const manualLabels = manualOnly.map(labelFor).join(", ");
+    warnings.push(
+      `${manualLabels} need${manualOnly.length === 1 ? "s" : ""} manual review — not included in the priced range above.`,
+    );
+  }
+
+  // Confidence: medium for any quoted result, even when stacked.
+  const confidence: Confidence = "medium";
+
+  const next_step =
+    manualOnly.length > 0
+      ? "We'll review your full scope and connect you with a vetted Sydney carpentry team. The manually-reviewed scopes will get a tailored ballpark, usually within one business day."
+      : numeric.length === 1
+        ? BRANCH_META[numeric[0].id].next_step
+        : "We'll review your details and connect you with a vetted Sydney carpentry team for a real quote.";
+
+  return {
+    range_low,
+    range_high,
+    display_range,
+    midpoint,
+    currency: "AUD",
+    itemised_breakdown,
+    confidence,
+    summary,
+    cost_drivers,
+    warnings,
+    next_step,
+  };
 }
 
 // Fire-and-forget POST to the server-side n8n webhook proxy.
@@ -941,8 +1281,6 @@ export default function ClockworkCarpentryPage() {
   const [pendingQuote, setPendingQuote] = useState<QuoteResult | null>(null);
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
 
-  // ── derived: selected types (preserved in selection order) ───────────────
-
   const selectedTypes = useMemo<ProjectType[]>(() => {
     const labels = (answers[PROJECT_TYPES_STEP.id] as string[] | undefined) ?? [];
     const out: ProjectType[] = [];
@@ -958,8 +1296,6 @@ export default function ClockworkCarpentryPage() {
     [selectedTypes],
   );
 
-  // ── flow: project types step → all selected branches' steps → shared ────
-
   const flow: Step[] = useMemo(() => {
     const steps: Step[] = [PROJECT_TYPES_STEP];
     if (selectedTypes.length === 0) return steps;
@@ -970,7 +1306,6 @@ export default function ClockworkCarpentryPage() {
     return steps;
   }, [selectedTypes]);
 
-  // Clamp stepIndex if flow shrinks (e.g. user goes back and unselects branches)
   useEffect(() => {
     if (stepIndex >= flow.length) {
       setStepIndex(Math.max(0, flow.length - 1));
@@ -982,8 +1317,6 @@ export default function ClockworkCarpentryPage() {
   const currentStep: Step | undefined = flow[stepIndex];
   const isLastStep =
     selectedTypes.length > 0 && stepIndex === flow.length - 1;
-
-  // ── handlers ─────────────────────────────────────────────────────────────
 
   const setAnswer = (key: string, value: AnswerValue) => {
     setAnswers((a) => ({ ...a, [key]: value }));
@@ -999,7 +1332,6 @@ export default function ClockworkCarpentryPage() {
         ? [...existing, label]
         : existing.filter((x) => x !== label);
 
-      // If unselecting, clear that branch's stale answers
       let cleaned: AnswerMap = a;
       if (!isAdding) {
         const removed = PROJECT_TYPES.find((p) => p.label === label);
@@ -1059,7 +1391,6 @@ export default function ClockworkCarpentryPage() {
     });
   };
 
-  // Build the submission payload + quote, but don't reveal the result yet.
   const buildSubmission = () => {
     const result = buildQuote(selectedTypeIds, answers);
 
@@ -1115,12 +1446,10 @@ export default function ClockworkCarpentryPage() {
       return;
     }
 
-    // Last step (contact) — generate
     if (selectedTypeIds.length === 0) return;
     const { payload, result } = buildSubmission();
 
     if (OTP_VERIFICATION_ENABLED) {
-      // Hold the result; only reveal after verified.
       setPendingPayload(payload);
       setPendingQuote(result);
       setShowPhoneVerify(true);
@@ -1128,7 +1457,6 @@ export default function ClockworkCarpentryPage() {
       // eslint-disable-next-line no-console
       console.log("[ClockworkCarpentry] submission payload:", payload);
       setQuote(result);
-      // Fire-and-forget — show the quote regardless of webhook outcome.
       void sendLeadToWebhook(payload);
     }
   };
@@ -1146,7 +1474,6 @@ export default function ClockworkCarpentryPage() {
         pendingPayload,
       );
       setQuote(pendingQuote);
-      // Fire-and-forget — show the quote regardless of webhook outcome.
       void sendLeadToWebhook(pendingPayload);
     }
     setShowPhoneVerify(false);
@@ -1155,7 +1482,6 @@ export default function ClockworkCarpentryPage() {
   };
 
   const handleOTPCancel = () => {
-    // Return to contact step — keep all answers and contact details intact.
     setShowPhoneVerify(false);
     setPendingPayload(null);
     setPendingQuote(null);
@@ -1170,22 +1496,18 @@ export default function ClockworkCarpentryPage() {
     setShowPhoneVerify(false);
   };
 
-  // ── render ───────────────────────────────────────────────────────────────
-
   const contactValue = isContactValue(answers.contact)
     ? answers.contact
     : null;
 
   return (
     <section className="relative min-h-[100dvh] flex flex-col overflow-hidden">
-      {/* Ambient brand glow */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute top-[-30%] right-[-15%] w-[60vw] h-[60vw] rounded-full bg-orange-safety/[0.05] blur-[120px]" />
         <div className="absolute bottom-[-25%] left-[-15%] w-[50vw] h-[50vw] rounded-full bg-orange-safety/[0.025] blur-[120px]" />
       </div>
 
       <div className="mx-auto w-full max-w-xl flex-1 flex flex-col px-5 sm:px-8 pt-8 sm:pt-12 pb-8">
-        {/* Top: brand label + step + progress */}
         <div className="mb-8 sm:mb-10">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
@@ -1209,7 +1531,6 @@ export default function ClockworkCarpentryPage() {
           </div>
         </div>
 
-        {/* Step / result body */}
         <div className="flex-1">
           {quote ? (
             <ResultScreen
@@ -1252,7 +1573,6 @@ export default function ClockworkCarpentryPage() {
           )}
         </div>
 
-        {/* Bottom nav */}
         {!quote && (
           <div className="mt-8 flex items-center justify-between gap-3">
             {stepIndex > 0 ? (
@@ -1282,14 +1602,13 @@ export default function ClockworkCarpentryPage() {
           </div>
         )}
 
-        {/* Disclaimer */}
         <p className="mt-10 text-[11px] text-gray-text leading-relaxed">
-          Ballpark guide only. Final pricing depends on site access, materials, engineering,
-          approvals, finish level and final scope.
+          All figures are shown in AUD and are a ballpark guide only, not a fixed quote.
+          Final pricing depends on site access, materials, engineering, approvals, finish
+          level and final scope.
         </p>
       </div>
 
-      {/* OTP overlay — gates the result reveal when enabled */}
       {showPhoneVerify && contactValue && (
         <PhoneVerify
           phone={contactValue.phone}
@@ -1302,7 +1621,7 @@ export default function ClockworkCarpentryPage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Step 0 — multi-select project types (with strong outcome headline)
+// Step 0 — multi-select project types
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ProjectTypesStep({
@@ -1385,7 +1704,7 @@ function ProjectTypesStep({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Dynamic step renderer (steps 1+)
+// Dynamic step renderer
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DynamicStep({
@@ -1788,7 +2107,7 @@ function ContactStep({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NSW Suburb Search (local component, no shared component imported)
+// NSW Suburb Search (local component)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function NSWSuburbSearch({
@@ -1965,7 +2284,7 @@ function ResultScreen({
         </div>
         <div className="min-w-0">
           <div className="text-[10px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
-            Your preliminary project range
+            Your preliminary itemised ballpark quote
           </div>
           <div className="mt-0.5 text-sm font-medium text-white truncate">
             {headerLabel}
@@ -1988,7 +2307,7 @@ function ResultScreen({
         </ul>
       )}
 
-      {/* Range card */}
+      {/* Range + midpoint card */}
       <div className="mt-5 rounded-2xl border border-orange-safety/30 bg-orange-safety/[0.07] p-5 sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="text-[10px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
@@ -1999,28 +2318,84 @@ function ResultScreen({
         <div className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">
           {quote.display_range}
         </div>
+        {quote.midpoint !== null && (
+          <div className="mt-1.5 text-sm text-gray-text">
+            Estimated midpoint:{" "}
+            <span className="text-white font-semibold">
+              {formatK(quote.midpoint)} AUD
+            </span>
+          </div>
+        )}
         <p className="mt-3 text-sm text-gray-text leading-relaxed">{quote.summary}</p>
       </div>
 
-      {/* Cost drivers */}
-      <div className="mt-5 rounded-2xl border border-gray-light bg-gray-mid/60 p-5">
-        <div className="flex items-center gap-2 text-sm font-semibold text-white">
-          <ClipboardText size={16} weight="duotone" className="text-orange-safety" />
-          Likely scope and cost drivers
+      {/* Itemised ballpark breakdown */}
+      {quote.itemised_breakdown.length > 0 && quote.midpoint !== null && (
+        <div className="mt-5 rounded-2xl border border-gray-light bg-gray-mid/60 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-light">
+            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+              <ListChecks size={16} weight="duotone" className="text-orange-safety" />
+              Itemised ballpark breakdown
+            </div>
+          </div>
+          <ul>
+            {quote.itemised_breakdown.map((item, i) => (
+              <li
+                key={item.label}
+                className={[
+                  "flex items-start justify-between gap-4 px-5 py-3.5",
+                  i < quote.itemised_breakdown.length - 1
+                    ? "border-b border-gray-light/40"
+                    : "",
+                ].join(" ")}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-white">{item.label}</div>
+                  <div className="mt-0.5 text-xs text-gray-text leading-relaxed">
+                    {item.note}
+                  </div>
+                </div>
+                <div className="text-sm font-semibold text-white tabular-nums whitespace-nowrap">
+                  {formatCurrency(item.amount)} AUD
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-t border-gray-light bg-gray-dark/40">
+            <div className="text-[10px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
+              Total midpoint
+            </div>
+            <div className="text-sm font-semibold text-white tabular-nums">
+              {formatCurrency(quote.midpoint)} AUD
+            </div>
+          </div>
         </div>
-        <ul className="mt-3 space-y-2">
-          {quote.cost_drivers.map((d) => (
-            <li key={d} className="flex gap-2 text-sm text-gray-text leading-relaxed">
-              <Check
-                size={14}
-                weight="bold"
-                className="mt-1 shrink-0 text-orange-safety"
-              />
-              <span>{d}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      )}
+
+      {/* Cost drivers */}
+      {quote.cost_drivers.length > 0 && (
+        <div className="mt-5 rounded-2xl border border-gray-light bg-gray-mid/40 p-5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white">
+            <ClipboardText size={16} weight="duotone" className="text-orange-safety" />
+            Cost drivers
+          </div>
+          <ul className="mt-3 space-y-2">
+            {quote.cost_drivers.map((d) => (
+              <li
+                key={d}
+                className="flex gap-2 text-sm text-gray-text leading-relaxed"
+              >
+                <Check
+                  size={14}
+                  weight="bold"
+                  className="mt-1 shrink-0 text-orange-safety"
+                />
+                <span>{d}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Warnings */}
       {quote.warnings.length > 0 && (
@@ -2050,8 +2425,9 @@ function ResultScreen({
 
       {/* Disclaimer */}
       <p className="mt-5 text-xs text-gray-text leading-relaxed">
-        This is a rough range, not a fixed quote. Final pricing depends on site access,
-        materials, engineering, approvals, finish level and final scope.
+        All figures are shown in AUD and are a ballpark guide only, not a fixed quote.
+        Final pricing depends on site access, materials, engineering, approvals, finish
+        level and final scope.
       </p>
 
       {/* Reset */}
