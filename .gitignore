@@ -57,3 +57,9 @@ app/Screenshot 2026-03-22 at 2.22.53*.png
 
 .env.local
 .env*.local
+# Local generated/raw NSW data
+data-cache/
+data/nsw-psi/
+
+# Local environment
+.env.local

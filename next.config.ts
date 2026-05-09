@@ -9,6 +9,15 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "4mb",
     },
   },
+  async redirects() {
+    return [
+      {
+        source: "/fergusonslandscapes",
+        destination: "/fergusons-landscaping",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
