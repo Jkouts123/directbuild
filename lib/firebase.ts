@@ -1,6 +1,19 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 
+const requiredFirebaseEnv = [
+  "NEXT_PUBLIC_FIREBASE_API_KEY",
+  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
+  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+  "NEXT_PUBLIC_FIREBASE_APP_ID",
+] as const;
+
+export function isFirebaseConfigured(): boolean {
+  return requiredFirebaseEnv.every((key) => Boolean(process.env[key]));
+}
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -14,9 +27,16 @@ let _app: FirebaseApp | undefined;
 let _auth: Auth | undefined;
 
 function getFirebaseApp(): FirebaseApp {
+  if (!isFirebaseConfigured()) {
+    throw new Error(
+      "Firebase is not configured. Add NEXT_PUBLIC_FIREBASE_* env vars or disable OTP.",
+    );
+  }
+
   if (!_app) {
     _app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   }
+
   return _app;
 }
 
@@ -24,8 +44,14 @@ export function getFirebaseAuth(): Auth {
   if (!_auth) {
     _auth = getAuth(getFirebaseApp());
   }
+
   return _auth;
 }
 
-// Keep backward-compatible export for existing imports
-export const auth = typeof window !== "undefined" ? getFirebaseAuth() : (null as unknown as Auth);
+// Backward-compatible lazy export.
+// Importing this module must not initialise Firebase.
+export const auth = new Proxy({} as Auth, {
+  get(_target, prop) {
+    return Reflect.get(getFirebaseAuth(), prop);
+  },
+});

@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/fergusonslandscapes",
-        destination: "/fergusons-landscaping",
+        destination: "/fergusons",
         permanent: true,
       },
     ];
