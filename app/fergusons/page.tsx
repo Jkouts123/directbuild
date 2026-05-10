@@ -29,8 +29,12 @@ import {
   Warning,
   X,
 } from "@phosphor-icons/react";
-import PhoneVerify from "../components/PhoneVerify";
+import dynamic from "next/dynamic";
 import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
+
+const PhoneVerify = dynamic(() => import("../components/PhoneVerify"), {
+  ssr: false,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
