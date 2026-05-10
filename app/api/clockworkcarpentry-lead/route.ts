@@ -37,8 +37,16 @@ export async function POST(req: Request) {
       ? (body as Record<string, unknown>)
       : {};
 
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  const clientIpAddress =
+    forwardedFor?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    undefined;
+
   const forwarded = {
     ...base,
+    user_agent: req.headers.get("user-agent") || undefined,
+    client_ip_address: clientIpAddress,
     server_received_at: new Date().toISOString(),
   };
 
