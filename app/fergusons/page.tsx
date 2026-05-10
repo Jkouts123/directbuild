@@ -1320,6 +1320,15 @@ function isContactValue(v: AnswerValue): v is ContactValue {
   );
 }
 
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+}
+
+function isValidAustralianMobile(phone: string): boolean {
+  const cleaned = phone.replace(/[\s()-]/g, "");
+  return /^(?:\+?61|0)4\d{8}$/.test(cleaned);
+}
+
 function isStepAnswered(step: Step, answers: AnswerMap): boolean {
   if (step.optional) return true;
   const v = answers[step.id];
@@ -1339,9 +1348,9 @@ function isStepAnswered(step: Step, answers: AnswerMap): boolean {
     case "contact": {
       if (!isContactValue(v)) return false;
       return Boolean(
-        v.name?.trim() &&
-          v.phone?.trim() &&
-          /\S+@\S+\.\S+/.test(v.email ?? ""),
+        v.name.trim().length >= 2 &&
+          isValidAustralianMobile(v.phone) &&
+          isValidEmail(v.email),
       );
     }
   }
@@ -2247,6 +2256,10 @@ function ContactStep({
     },
   ];
 
+  const showEmailError = value.email.trim().length > 0 && !isValidEmail(value.email);
+  const showPhoneError =
+    value.phone.trim().length > 0 && !isValidAustralianMobile(value.phone);
+
   return (
     <div className="space-y-4">
       {fields.map((f) => (
@@ -2268,6 +2281,16 @@ function ContactStep({
               className="w-full rounded-xl border border-gray-light bg-gray-mid pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-text focus:border-orange-safety outline-none min-h-[48px]"
             />
           </div>
+          {f.field === "phone" && showPhoneError && (
+            <p className="mt-1.5 text-xs text-orange-safety">
+              Enter a valid Australian mobile number, e.g. 04xx xxx xxx.
+            </p>
+          )}
+          {f.field === "email" && showEmailError && (
+            <p className="mt-1.5 text-xs text-orange-safety">
+              Enter a valid email address so we can send the estimate details.
+            </p>
+          )}
         </div>
       ))}
     </div>
