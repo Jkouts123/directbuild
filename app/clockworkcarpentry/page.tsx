@@ -31,6 +31,10 @@ import {
 } from "@phosphor-icons/react";
 import PhoneVerify from "../components/PhoneVerify";
 import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
+import {
+  getSupabaseBrowserClient,
+  getSupabasePhotoBucket,
+} from "@/lib/supabase-browser";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -81,6 +85,14 @@ type AnswerValue =
   | SuburbEntry
   | undefined;
 type AnswerMap = Record<string, AnswerValue>;
+
+type UploadedPhoto = {
+  name: string;
+  size: number;
+  type: string;
+  storage_path: string;
+  public_url: string;
+};
 
 type Confidence = "low" | "medium" | "manual";
 
@@ -1389,6 +1401,69 @@ async function sendLeadToWebhook(payload: unknown): Promise<void> {
   }
 }
 
+function safeStorageFileName(name: string): string {
+  const trimmed = name.trim() || "upload";
+  return trimmed
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 120) || "upload";
+}
+
+function createPhotoUploadFolder(): string {
+  const randomId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+
+  return `clockwork/${Date.now()}-${randomId}`;
+}
+
+async function uploadClockworkPhotos(files: File[]): Promise<UploadedPhoto[]> {
+  if (files.length === 0) return [];
+
+  // eslint-disable-next-line no-console
+  console.log("[ClockworkCarpentry] photo upload started", {
+    count: files.length,
+  });
+
+  const supabase = getSupabaseBrowserClient();
+  const bucket = getSupabasePhotoBucket();
+  const folder = createPhotoUploadFolder();
+
+  const uploaded: UploadedPhoto[] = [];
+
+  for (const [index, file] of files.entries()) {
+    const path = `${folder}/${index}-${safeStorageFileName(file.name)}`;
+    const { error } = await supabase.storage.from(bucket).upload(path, file, {
+      contentType: file.type || undefined,
+      upsert: false,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    uploaded.push({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      storage_path: path,
+      public_url: data.publicUrl,
+    });
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("[ClockworkCarpentry] photo upload success", {
+    count: uploaded.length,
+  });
+  // eslint-disable-next-line no-console
+  console.log("[ClockworkCarpentry] photo_urls count", uploaded.length);
+
+  return uploaded;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1452,7 +1527,11 @@ export default function ClockworkCarpentryPage() {
   const [quote, setQuote] = useState<QuoteResult | null>(null);
 
   // Pending submission (held while OTP overlay is open)
-  const [pendingPayload, setPendingPayload] = useState<unknown | null>(null);
+  const [pendingPayload, setPendingPayload] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
   const [pendingQuote, setPendingQuote] = useState<QuoteResult | null>(null);
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
 
@@ -1607,10 +1686,44 @@ export default function ClockworkCarpentryPage() {
         size: f.size,
         type: f.type,
       })),
+      photo_urls: [],
       quote_result: result,
     };
 
-    return { payload, result };
+    return { payload, result, photoFiles };
+  };
+
+  const submitLeadWithUploadedPhotos = async (
+    payload: Record<string, unknown>,
+    photoFiles: File[],
+    logLabel: string,
+  ) => {
+    let finalPayload: Record<string, unknown> = payload;
+
+    if (photoFiles.length > 0) {
+      try {
+        const uploadedPhotos = await uploadClockworkPhotos(photoFiles);
+        finalPayload = {
+          ...payload,
+          photos: uploadedPhotos,
+          photo_urls: uploadedPhotos.map((photo) => photo.public_url),
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        finalPayload = {
+          ...payload,
+          photo_upload_error: message,
+        };
+        // eslint-disable-next-line no-console
+        console.error("[ClockworkCarpentry] photo upload failed:", err);
+        // eslint-disable-next-line no-console
+        console.log("[ClockworkCarpentry] photo_urls count", 0);
+      }
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(logLabel, finalPayload);
+    await sendLeadToWebhook(finalPayload);
   };
 
   const goNext = () => {
@@ -1622,17 +1735,20 @@ export default function ClockworkCarpentryPage() {
     }
 
     if (selectedTypeIds.length === 0) return;
-    const { payload, result } = buildSubmission();
+    const { payload, result, photoFiles } = buildSubmission();
 
     if (OTP_VERIFICATION_ENABLED) {
       setPendingPayload(payload);
+      setPendingPhotoFiles(photoFiles);
       setPendingQuote(result);
       setShowPhoneVerify(true);
     } else {
-      // eslint-disable-next-line no-console
-      console.log("[ClockworkCarpentry] submission payload:", payload);
       setQuote(result);
-      void sendLeadToWebhook(payload);
+      void submitLeadWithUploadedPhotos(
+        payload,
+        photoFiles,
+        "[ClockworkCarpentry] submission payload:",
+      );
     }
   };
 
@@ -1643,22 +1759,23 @@ export default function ClockworkCarpentryPage() {
 
   const handleOTPVerified = () => {
     if (pendingPayload && pendingQuote) {
-      // eslint-disable-next-line no-console
-      console.log(
-        "[ClockworkCarpentry] submission payload (OTP verified):",
-        pendingPayload,
-      );
       setQuote(pendingQuote);
-      void sendLeadToWebhook(pendingPayload);
+      void submitLeadWithUploadedPhotos(
+        pendingPayload,
+        pendingPhotoFiles,
+        "[ClockworkCarpentry] submission payload (OTP verified):",
+      );
     }
     setShowPhoneVerify(false);
     setPendingPayload(null);
+    setPendingPhotoFiles([]);
     setPendingQuote(null);
   };
 
   const handleOTPCancel = () => {
     setShowPhoneVerify(false);
     setPendingPayload(null);
+    setPendingPhotoFiles([]);
     setPendingQuote(null);
   };
 
@@ -1667,6 +1784,7 @@ export default function ClockworkCarpentryPage() {
     setAnswers({});
     setQuote(null);
     setPendingPayload(null);
+    setPendingPhotoFiles([]);
     setPendingQuote(null);
     setShowPhoneVerify(false);
   };
