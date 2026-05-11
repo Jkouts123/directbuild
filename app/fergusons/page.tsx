@@ -30,6 +30,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import dynamic from "next/dynamic";
+import Script from "next/script";
 import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
 import {
   getSupabaseBrowserClient,
@@ -39,6 +40,8 @@ import {
 const PhoneVerify = dynamic(() => import("../components/PhoneVerify"), {
   ssr: false,
 });
+
+const FERGUSONS_META_PIXEL_ID = "1219015826809496";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -1310,6 +1313,62 @@ async function sendLeadToWebhook(payload: unknown): Promise<void> {
   }
 }
 
+function createMetaEventId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function trackFergusonsLead(metaEventId: unknown): void {
+  if (typeof window === "undefined") return;
+
+  const fbq = (
+    window as Window & {
+      fbq?: (
+        eventType: string,
+        eventName: string,
+        parameters: Record<string, unknown>,
+        options: Record<string, unknown>,
+      ) => void;
+    }
+  ).fbq;
+
+  if (typeof fbq !== "function") {
+    // eslint-disable-next-line no-console
+    console.warn("[Fergusons Meta Pixel] fbq is not available; Lead not tracked.");
+    return;
+  }
+
+  if (typeof metaEventId !== "string" || metaEventId.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[Fergusons Meta Pixel] meta_event_id missing; Lead not tracked.",
+    );
+    return;
+  }
+
+  try {
+    fbq(
+      "track",
+      "Lead",
+      {
+        content_name: "Fergusons Landscaping Budget Snapshot",
+        content_category: "Landscaping Lead",
+        currency: "AUD",
+        value: 0,
+      },
+      {
+        eventID: metaEventId,
+      },
+    );
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[Fergusons Meta Pixel] Lead tracking failed.", err);
+  }
+}
+
 function safeStorageFileName(name: string): string {
   const trimmed = name.trim() || "upload";
   return trimmed
@@ -1561,6 +1620,7 @@ export default function FergusonsPage() {
 
   const buildSubmission = () => {
     const result = buildQuote(selectedTypeIds, answers);
+    const metaEventId = createMetaEventId();
 
     const photoFiles = Array.isArray(answers.photos)
       ? (answers.photos as File[])
@@ -1587,6 +1647,7 @@ export default function FergusonsPage() {
       partner: "Ferguson's Landscapes",
       source_page: "fergusons",
       campaign_name: "fergusons_landscaping_pilot",
+      meta_event_id: metaEventId,
       selected_project_types: selectedTypes.map((t) => ({
         id: t.id,
         label: t.label,
@@ -1637,6 +1698,7 @@ export default function FergusonsPage() {
 
     // eslint-disable-next-line no-console
     console.log(logLabel, finalPayload);
+    trackFergusonsLead(finalPayload.meta_event_id);
     await sendLeadToWebhook(finalPayload);
   };
 
@@ -1709,6 +1771,33 @@ export default function FergusonsPage() {
 
   return (
     <section className="relative min-h-[100dvh] flex flex-col overflow-hidden">
+      <Script
+        id="fergusons-meta-pixel"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', '${FERGUSONS_META_PIXEL_ID}');
+            fbq('track', 'PageView');
+          `,
+        }}
+      />
+      <noscript>
+        <img
+          height="1"
+          width="1"
+          style={{ display: "none" }}
+          src={`https://www.facebook.com/tr?id=${FERGUSONS_META_PIXEL_ID}&ev=PageView&noscript=1`}
+          alt=""
+        />
+      </noscript>
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute top-[-30%] right-[-15%] w-[60vw] h-[60vw] rounded-full bg-orange-safety/[0.05] blur-[120px]" />
         <div className="absolute bottom-[-25%] left-[-15%] w-[50vw] h-[50vw] rounded-full bg-orange-safety/[0.025] blur-[120px]" />
