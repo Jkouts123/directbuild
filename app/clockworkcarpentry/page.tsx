@@ -31,10 +31,6 @@ import {
 } from "@phosphor-icons/react";
 import PhoneVerify from "../components/PhoneVerify";
 import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
-import {
-  getSupabaseBrowserClient,
-  getSupabasePhotoBucket,
-} from "@/lib/supabase-browser";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -86,23 +82,6 @@ type AnswerValue =
   | undefined;
 type AnswerMap = Record<string, AnswerValue>;
 
-type UploadedPhoto = {
-  name: string;
-  size: number;
-  type: string;
-  storage_path: string;
-  public_url: string;
-};
-
-type FbqFunction = {
-  (...args: unknown[]): void;
-  callMethod?: (...args: unknown[]) => void;
-  queue?: unknown[];
-  push?: FbqFunction;
-  loaded?: boolean;
-  version?: string;
-};
-
 type Confidence = "low" | "medium" | "manual";
 
 type ItemisedLine = { label: string; amount: number; note: string };
@@ -120,14 +99,6 @@ type QuoteResult = {
   warnings: string[];
   next_step: string;
 };
-
-const CLOCKWORK_META_PIXEL_ID =
-  process.env.NEXT_PUBLIC_META_PIXEL_ID_CLOCKWORK || "2004054013543710";
-const CLOCKWORK_META_ROUTE = "/clockworkcarpentry";
-const CLOCKWORK_RESULT_SELECTOR = '[data-clockwork-quote-result="true"]';
-
-let clockworkMetaPageViewTracked = false;
-let clockworkMetaPixelInitialized = false;
 
 type ProjectType = {
   id: BranchKey;
@@ -1402,191 +1373,20 @@ function buildQuote(
 
 // Fire-and-forget POST to the server-side n8n webhook proxy.
 // Failures are logged but never block the quote result UI.
-async function sendClockworkLeadToWebhook(
-  payload: unknown,
-): Promise<boolean> {
+async function sendLeadToWebhook(payload: unknown): Promise<void> {
   try {
     const res = await fetch("/api/clockworkcarpentry-lead", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const json = (await res.json().catch(() => ({}))) as { ok?: unknown };
-    debugMetaLog("[Clockwork Meta] lead webhook result", json);
-    return Boolean(res.ok && json.ok === true);
+    const json = (await res.json().catch(() => ({}))) as unknown;
+    // eslint-disable-next-line no-console
+    console.log("Clockwork lead webhook result", json);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Clockwork lead webhook error", err);
-    return false;
   }
-}
-
-function hasDebugMeta(): boolean {
-  if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("debugMeta") === "1";
-}
-
-function debugMetaLog(message: string, value?: unknown): void {
-  if (!hasDebugMeta()) return;
-  // eslint-disable-next-line no-console
-  console.log(message, value ?? "");
-}
-
-function getCookieValue(name: string): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const prefix = `${name}=`;
-  const cookie = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(prefix));
-
-  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : undefined;
-}
-
-function createMetaEventId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function ensureMetaPixel(): void {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return;
-  }
-
-  if (!window.fbq) {
-    const fbq = ((...args: unknown[]) => {
-      if (fbq.callMethod) {
-        fbq.callMethod(...args);
-      } else {
-        fbq.queue?.push(args);
-      }
-    }) as FbqFunction;
-
-    fbq.push = fbq;
-    fbq.loaded = true;
-    fbq.version = "2.0";
-    fbq.queue = [];
-    window.fbq = fbq;
-    window._fbq = fbq;
-  }
-
-  if (
-    !document.querySelector(
-      'script[src="https://connect.facebook.net/en_US/fbevents.js"]',
-    )
-  ) {
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://connect.facebook.net/en_US/fbevents.js";
-    const firstScript = document.getElementsByTagName("script")[0];
-    firstScript?.parentNode?.insertBefore(script, firstScript);
-  }
-}
-
-function trackClockworkLead(metaEventId: string): void {
-  if (typeof window === "undefined" || !window.fbq) return;
-
-  window.fbq("track", "Lead", {}, { eventID: metaEventId });
-  debugMetaLog("[Clockwork Meta] Lead fired with meta_event_id", metaEventId);
-}
-
-function trackClockworkLeadAfterResultShown(metaEventId: string): void {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
-
-  const tryTrack = (remainingAttempts: number) => {
-    if (document.querySelector(CLOCKWORK_RESULT_SELECTOR)) {
-      trackClockworkLead(metaEventId);
-      return;
-    }
-
-    if (remainingAttempts <= 0) {
-      debugMetaLog(
-        "[Clockwork Meta] Lead skipped because result screen was not visible",
-        metaEventId,
-      );
-      return;
-    }
-
-    window.requestAnimationFrame(() => tryTrack(remainingAttempts - 1));
-  };
-
-  window.requestAnimationFrame(() => tryTrack(2));
-}
-
-function buildClockworkMetaPayload(metaEventId: string) {
-  const eventSourceUrl =
-    typeof window !== "undefined" ? window.location.href : undefined;
-
-  return {
-    meta_event_id: metaEventId,
-    fbp: getCookieValue("_fbp"),
-    fbc: getCookieValue("_fbc"),
-    event_source_url: eventSourceUrl,
-    source_page: "clockworkcarpentry",
-  };
-}
-
-function safeStorageFileName(name: string): string {
-  const trimmed = name.trim() || "upload";
-  return trimmed
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 120) || "upload";
-}
-
-function createPhotoUploadFolder(): string {
-  const randomId =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-
-  return `clockwork/${Date.now()}-${randomId}`;
-}
-
-async function uploadClockworkPhotos(files: File[]): Promise<UploadedPhoto[]> {
-  if (files.length === 0) return [];
-
-  debugMetaLog("[Clockwork Meta] photo upload started", {
-    count: files.length,
-  });
-
-  const supabase = getSupabaseBrowserClient();
-  const bucket = getSupabasePhotoBucket();
-  const folder = createPhotoUploadFolder();
-
-  const uploaded: UploadedPhoto[] = [];
-
-  for (const [index, file] of files.entries()) {
-    const path = `${folder}/${index}-${safeStorageFileName(file.name)}`;
-    const { error } = await supabase.storage.from(bucket).upload(path, file, {
-      contentType: file.type || undefined,
-      upsert: false,
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-    uploaded.push({
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      storage_path: path,
-      public_url: data.publicUrl,
-    });
-  }
-
-  debugMetaLog("[Clockwork Meta] photo upload success", {
-    count: uploaded.length,
-  });
-  debugMetaLog("[Clockwork Meta] photo_urls count", uploaded.length);
-
-  return uploaded;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1650,39 +1450,11 @@ export default function ClockworkCarpentryPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [quote, setQuote] = useState<QuoteResult | null>(null);
-  const pageViewTrackedRef = useRef(false);
 
   // Pending submission (held while OTP overlay is open)
-  const [pendingPayload, setPendingPayload] = useState<Record<
-    string,
-    unknown
-  > | null>(null);
-  const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
+  const [pendingPayload, setPendingPayload] = useState<unknown | null>(null);
   const [pendingQuote, setPendingQuote] = useState<QuoteResult | null>(null);
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
-
-  useEffect(() => {
-    const pathname = window.location.pathname.replace(/\/$/, "");
-    if (pathname !== CLOCKWORK_META_ROUTE) {
-      debugMetaLog("[Clockwork Meta] PageView skipped for pathname", pathname);
-      return;
-    }
-
-    if (pageViewTrackedRef.current || clockworkMetaPageViewTracked) return;
-
-    ensureMetaPixel();
-    if (!clockworkMetaPixelInitialized) {
-      window.fbq?.("init", CLOCKWORK_META_PIXEL_ID);
-      clockworkMetaPixelInitialized = true;
-    }
-    window.fbq?.("track", "PageView");
-    pageViewTrackedRef.current = true;
-    clockworkMetaPageViewTracked = true;
-
-    debugMetaLog("[Clockwork Meta] pathname", window.location.pathname);
-    debugMetaLog("[Clockwork Meta] pixel ID used", CLOCKWORK_META_PIXEL_ID);
-    debugMetaLog("[Clockwork Meta] PageView fired");
-  }, []);
 
   const selectedTypes = useMemo<ProjectType[]>(() => {
     const labels = (answers[PROJECT_TYPES_STEP.id] as string[] | undefined) ?? [];
@@ -1835,47 +1607,10 @@ export default function ClockworkCarpentryPage() {
         size: f.size,
         type: f.type,
       })),
-      photo_urls: [],
       quote_result: result,
     };
 
-    return { payload, result, photoFiles };
-  };
-
-  const submitLeadWithUploadedPhotos = async (
-    payload: Record<string, unknown>,
-    photoFiles: File[],
-    metaEventId: string,
-  ) => {
-    let finalPayload: Record<string, unknown> = {
-      ...payload,
-      ...buildClockworkMetaPayload(metaEventId),
-    };
-
-    if (photoFiles.length > 0) {
-      try {
-        const uploadedPhotos = await uploadClockworkPhotos(photoFiles);
-        finalPayload = {
-          ...finalPayload,
-          photos: uploadedPhotos,
-          photo_urls: uploadedPhotos.map((photo) => photo.public_url),
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        finalPayload = {
-          ...finalPayload,
-          photo_upload_error: message,
-        };
-        // eslint-disable-next-line no-console
-        console.error("[ClockworkCarpentry] photo upload failed:", err);
-        debugMetaLog("[Clockwork Meta] photo_urls count", 0);
-      }
-    }
-
-    const sent = await sendClockworkLeadToWebhook(finalPayload);
-    if (sent) {
-      trackClockworkLeadAfterResultShown(metaEventId);
-    }
+    return { payload, result };
   };
 
   const goNext = () => {
@@ -1887,20 +1622,17 @@ export default function ClockworkCarpentryPage() {
     }
 
     if (selectedTypeIds.length === 0) return;
-    const { payload, result, photoFiles } = buildSubmission();
+    const { payload, result } = buildSubmission();
 
     if (OTP_VERIFICATION_ENABLED) {
       setPendingPayload(payload);
-      setPendingPhotoFiles(photoFiles);
       setPendingQuote(result);
       setShowPhoneVerify(true);
     } else {
+      // eslint-disable-next-line no-console
+      console.log("[ClockworkCarpentry] submission payload:", payload);
       setQuote(result);
-      void submitLeadWithUploadedPhotos(
-        payload,
-        photoFiles,
-        createMetaEventId(),
-      );
+      void sendLeadToWebhook(payload);
     }
   };
 
@@ -1911,23 +1643,22 @@ export default function ClockworkCarpentryPage() {
 
   const handleOTPVerified = () => {
     if (pendingPayload && pendingQuote) {
-      setQuote(pendingQuote);
-      void submitLeadWithUploadedPhotos(
+      // eslint-disable-next-line no-console
+      console.log(
+        "[ClockworkCarpentry] submission payload (OTP verified):",
         pendingPayload,
-        pendingPhotoFiles,
-        createMetaEventId(),
       );
+      setQuote(pendingQuote);
+      void sendLeadToWebhook(pendingPayload);
     }
     setShowPhoneVerify(false);
     setPendingPayload(null);
-    setPendingPhotoFiles([]);
     setPendingQuote(null);
   };
 
   const handleOTPCancel = () => {
     setShowPhoneVerify(false);
     setPendingPayload(null);
-    setPendingPhotoFiles([]);
     setPendingQuote(null);
   };
 
@@ -1936,7 +1667,6 @@ export default function ClockworkCarpentryPage() {
     setAnswers({});
     setQuote(null);
     setPendingPayload(null);
-    setPendingPhotoFiles([]);
     setPendingQuote(null);
     setShowPhoneVerify(false);
   };
@@ -2808,7 +2538,6 @@ function ResultScreen({
 
   return (
     <motion.div
-      data-clockwork-quote-result="true"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
