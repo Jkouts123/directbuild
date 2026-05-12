@@ -1321,6 +1321,40 @@ function createMetaEventId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function readCookie(name: string): string {
+  if (typeof document === "undefined") return "";
+
+  try {
+    const prefix = `${name}=`;
+    const cookie = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(prefix));
+
+    return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : "";
+  } catch {
+    return "";
+  }
+}
+
+function getFbcFromUrlOrCookie(): string {
+  const cookieFbc = readCookie("_fbc");
+  if (cookieFbc) return cookieFbc;
+  if (typeof window === "undefined") return "";
+
+  try {
+    const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+    return fbclid ? `fb.1.${Date.now()}.${fbclid}` : "";
+  } catch {
+    return "";
+  }
+}
+
+function getFergusonsEventSourceUrl(): string {
+  if (typeof window === "undefined") return "https://www.directbuild.au/fergusons";
+  return window.location.href || "https://www.directbuild.au/fergusons";
+}
+
 function trackFergusonsLead(metaEventId: unknown): void {
   if (typeof window === "undefined") return;
 
@@ -1648,6 +1682,9 @@ export default function FergusonsPage() {
       source_page: "fergusons",
       campaign_name: "fergusons_landscaping_pilot",
       meta_event_id: metaEventId,
+      fbp: readCookie("_fbp"),
+      fbc: getFbcFromUrlOrCookie(),
+      event_source_url: getFergusonsEventSourceUrl(),
       selected_project_types: selectedTypes.map((t) => ({
         id: t.id,
         label: t.label,
