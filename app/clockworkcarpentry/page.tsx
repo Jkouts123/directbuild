@@ -32,6 +32,14 @@ import {
 import PhoneVerify from "../components/PhoneVerify";
 import { OTP_VERIFICATION_ENABLED } from "@/lib/feature-flags";
 
+const CLOCKWORK_META_PIXEL_ID = "2059877051444776";
+const CLOCKWORK_META_ROUTE = "/clockworkcarpentry";
+const CLOCKWORK_EVENT_SOURCE_URL = "https://www.directbuild.au/clockworkcarpentry";
+const CLOCKWORK_RESULT_SELECTOR = '[data-clockwork-result="true"]';
+
+let clockworkPageViewTracked = false;
+let clockworkPixelInitialized = false;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1389,6 +1397,122 @@ async function sendLeadToWebhook(payload: unknown): Promise<void> {
   }
 }
 
+function readMetaCookie(name: string): string {
+  if (typeof document === "undefined") return "";
+
+  try {
+    const prefix = `${name}=`;
+    const cookie = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(prefix));
+
+    return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : "";
+  } catch {
+    return "";
+  }
+}
+
+function getClockworkFbc(): string {
+  const cookieValue = readMetaCookie("_fbc");
+  if (cookieValue) return cookieValue;
+  if (typeof window === "undefined") return "";
+
+  try {
+    const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+    return fbclid ? `fb.1.${Date.now()}.${fbclid}` : "";
+  } catch {
+    return "";
+  }
+}
+
+function createMetaEventId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function ensureClockworkMetaPixel(): void {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  if (typeof window.fbq !== "function") {
+    const fbq = function (...args: unknown[]) {
+      if (fbq.callMethod) {
+        fbq.callMethod(...args);
+      } else {
+        fbq.queue.push(args);
+      }
+    } as typeof window.fbq & {
+      callMethod?: (...args: unknown[]) => void;
+      queue: unknown[];
+      push?: unknown;
+      loaded?: boolean;
+      version?: string;
+    };
+
+    fbq.queue = [];
+    fbq.push = fbq;
+    fbq.loaded = true;
+    fbq.version = "2.0";
+    window.fbq = fbq;
+    window._fbq = fbq;
+  }
+
+  if (
+    !document.querySelector(
+      'script[src="https://connect.facebook.net/en_US/fbevents.js"]',
+    )
+  ) {
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://connect.facebook.net/en_US/fbevents.js";
+    document.head.appendChild(script);
+  }
+
+  if (!clockworkPixelInitialized) {
+    window.fbq("init", CLOCKWORK_META_PIXEL_ID);
+    clockworkPixelInitialized = true;
+  }
+}
+
+function trackClockworkPageView(): void {
+  if (typeof window === "undefined") return;
+  const pathname = window.location.pathname.replace(/\/$/, "");
+  if (pathname !== CLOCKWORK_META_ROUTE || clockworkPageViewTracked) return;
+
+  ensureClockworkMetaPixel();
+  window.fbq?.("track", "PageView");
+  clockworkPageViewTracked = true;
+}
+
+function trackClockworkLead(metaEventId: unknown): void {
+  if (typeof window === "undefined") return;
+
+  ensureClockworkMetaPixel();
+  if (typeof window.fbq !== "function") return;
+  if (typeof metaEventId !== "string" || metaEventId.length === 0) return;
+
+  window.fbq("track", "Lead", {}, { eventID: metaEventId });
+}
+
+function trackClockworkLeadAfterResultShown(metaEventId: unknown): void {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  const tryTrack = (remainingAttempts: number) => {
+    if (document.querySelector(CLOCKWORK_RESULT_SELECTOR)) {
+      trackClockworkLead(metaEventId);
+      return;
+    }
+
+    if (remainingAttempts <= 0) return;
+    window.requestAnimationFrame(() => tryTrack(remainingAttempts - 1));
+  };
+
+  window.requestAnimationFrame(() => tryTrack(3));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1415,6 +1539,79 @@ function isContactValue(v: AnswerValue): v is ContactValue {
   );
 }
 
+function normaliseEmailAddress(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function validateEmailAddress(email: string): { valid: boolean; message?: string } {
+  const cleaned = normaliseEmailAddress(email);
+  const genericMessage =
+    "Enter a real email address so we can attach the range to your project.";
+  const domainTypos: Record<string, string> = {
+    "gmail.con": "gmail.com",
+    "gmai.com": "gmail.com",
+    "gmial.com": "gmail.com",
+    "hotmail.con": "hotmail.com",
+    "hotmial.com": "hotmail.com",
+    "outlook.con": "outlook.com",
+    "icloud.con": "icloud.com",
+    "yahoo.con": "yahoo.com",
+  };
+  const blockedEmails = new Set([
+    "test@test.com",
+    "test@example.com",
+    "user@example.com",
+    "abc@abc.com",
+    "a@a.com",
+  ]);
+  const blockedDomains = new Set([
+    "example.com",
+    "fake.com",
+    "noemail.com",
+    "email.com",
+  ]);
+  const fakeMailLocals = new Set(["test", "fake", "noemail", "email", "user"]);
+
+  if (!cleaned || /\s/.test(cleaned)) return { valid: false, message: genericMessage };
+  if ((cleaned.match(/@/g) ?? []).length !== 1) {
+    return { valid: false, message: genericMessage };
+  }
+
+  const [local, domain] = cleaned.split("@");
+  if (!local || !domain) return { valid: false, message: genericMessage };
+
+  const typoSuggestion = domainTypos[domain];
+  if (typoSuggestion) {
+    return { valid: false, message: `Did you mean ${typoSuggestion}?` };
+  }
+
+  if (
+    cleaned.includes("..") ||
+    blockedEmails.has(cleaned) ||
+    blockedDomains.has(domain) ||
+    (domain === "mail.com" && fakeMailLocals.has(local))
+  ) {
+    return { valid: false, message: genericMessage };
+  }
+
+  const domainParts = domain.split(".");
+  const tld = domainParts.at(-1) ?? "";
+  const hasBadDomainPart = domainParts.some(
+    (part) => !part || part.startsWith("-") || part.endsWith("-"),
+  );
+
+  if (
+    domainParts.length < 2 ||
+    hasBadDomainPart ||
+    !/^[a-z]{2,}$/.test(tld) ||
+    !/^[^\s@]+$/.test(local)
+  ) {
+    return { valid: false, message: genericMessage };
+  }
+
+  return { valid: true };
+}
+
 function isStepAnswered(step: Step, answers: AnswerMap): boolean {
   if (step.optional) return true;
   const v = answers[step.id];
@@ -1436,7 +1633,7 @@ function isStepAnswered(step: Step, answers: AnswerMap): boolean {
       return Boolean(
         v.name?.trim() &&
           v.phone?.trim() &&
-          /\S+@\S+\.\S+/.test(v.email ?? ""),
+          validateEmailAddress(v.email ?? "").valid,
       );
     }
   }
@@ -1455,6 +1652,10 @@ export default function ClockworkCarpentryPage() {
   const [pendingPayload, setPendingPayload] = useState<unknown | null>(null);
   const [pendingQuote, setPendingQuote] = useState<QuoteResult | null>(null);
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+
+  useEffect(() => {
+    trackClockworkPageView();
+  }, []);
 
   const selectedTypes = useMemo<ProjectType[]>(() => {
     const labels = (answers[PROJECT_TYPES_STEP.id] as string[] | undefined) ?? [];
@@ -1562,18 +1763,25 @@ export default function ClockworkCarpentryPage() {
       const existing = isContactValue(a.contact)
         ? a.contact
         : { name: "", phone: "", email: "" };
-      return { ...a, contact: { ...existing, [field]: value } };
+      const nextValue = field === "email" ? normaliseEmailAddress(value) : value;
+      return { ...a, contact: { ...existing, [field]: nextValue } };
     });
   };
 
   const buildSubmission = () => {
     const result = buildQuote(selectedTypeIds, answers);
+    const metaEventId = createMetaEventId();
 
     const photoFiles = Array.isArray(answers.photos)
       ? (answers.photos as File[])
       : [];
 
-    const contact = isContactValue(answers.contact) ? answers.contact : null;
+    const contact = isContactValue(answers.contact)
+      ? {
+          ...answers.contact,
+          email: normaliseEmailAddress(answers.contact.email),
+        }
+      : null;
     const suburbEntry = isSuburbEntry(answers.suburb) ? answers.suburb : null;
 
     const {
@@ -1594,6 +1802,10 @@ export default function ClockworkCarpentryPage() {
       partner: "Clockwork Carpentry",
       source_page: "clockworkcarpentry",
       campaign_name: "clockwork_carpentry_pilot",
+      meta_event_id: metaEventId,
+      fbp: readMetaCookie("_fbp"),
+      fbc: getClockworkFbc(),
+      event_source_url: CLOCKWORK_EVENT_SOURCE_URL,
       selected_project_types: selectedTypes.map((t) => ({
         id: t.id,
         label: t.label,
@@ -1611,6 +1823,13 @@ export default function ClockworkCarpentryPage() {
     };
 
     return { payload, result };
+  };
+
+  const sendLeadToWebhookAndTrack = async (payload: object) => {
+    await sendLeadToWebhook(payload);
+    trackClockworkLeadAfterResultShown(
+      (payload as { meta_event_id?: unknown }).meta_event_id,
+    );
   };
 
   const goNext = () => {
@@ -1632,7 +1851,7 @@ export default function ClockworkCarpentryPage() {
       // eslint-disable-next-line no-console
       console.log("[ClockworkCarpentry] submission payload:", payload);
       setQuote(result);
-      void sendLeadToWebhook(payload);
+      void sendLeadToWebhookAndTrack(payload);
     }
   };
 
@@ -1649,7 +1868,7 @@ export default function ClockworkCarpentryPage() {
         pendingPayload,
       );
       setQuote(pendingQuote);
-      void sendLeadToWebhook(pendingPayload);
+      void sendLeadToWebhookAndTrack(pendingPayload);
     }
     setShowPhoneVerify(false);
     setPendingPayload(null);
@@ -2326,6 +2545,8 @@ function ContactStep({
   value: ContactValue;
   onChange: (field: keyof ContactValue, value: string) => void;
 }) {
+  const emailValidation = validateEmailAddress(value.email);
+  const emailError = emailValidation.valid ? undefined : emailValidation.message;
   const fields: {
     field: keyof ContactValue;
     label: string;
@@ -2362,9 +2583,28 @@ function ContactStep({
               value={value[f.field]}
               onChange={(e) => onChange(f.field, e.target.value)}
               placeholder={f.placeholder}
-              className="w-full rounded-xl border border-gray-light bg-gray-mid pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-text focus:border-orange-safety outline-none min-h-[48px]"
+              aria-invalid={f.field === "email" && !!emailError}
+              aria-describedby={
+                f.field === "email" && emailError
+                  ? "clockwork-email-error"
+                  : undefined
+              }
+              className={[
+                "w-full rounded-xl border bg-gray-mid pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-text focus:border-orange-safety outline-none min-h-[48px]",
+                f.field === "email" && emailError
+                  ? "border-orange-safety"
+                  : "border-gray-light",
+              ].join(" ")}
             />
           </div>
+          {f.field === "email" && emailError && (
+            <p
+              id="clockwork-email-error"
+              className="mt-1.5 text-xs leading-relaxed text-orange-safety"
+            >
+              {emailError}
+            </p>
+          )}
         </div>
       ))}
     </div>
@@ -2538,6 +2778,7 @@ function ResultScreen({
 
   return (
     <motion.div
+      data-clockwork-result="true"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
