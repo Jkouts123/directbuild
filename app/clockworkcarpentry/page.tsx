@@ -170,12 +170,14 @@ const PROJECT_TYPES: ProjectType[] = [
   },
 ];
 
+const HOMEOWNER_PROJECT_TYPES = PROJECT_TYPES.filter((p) => p.id !== "builder");
+
 const PROJECT_TYPES_STEP: Step = {
   id: "__projectTypes",
   kind: "multi",
-  title: "Select everything involved",
-  hint: "Pick everything that's part of the project — we'll ask about each one.",
-  options: PROJECT_TYPES.map((p) => p.label),
+  title: "What are you planning?",
+  hint: "Choose everything that applies.",
+  options: HOMEOWNER_PROJECT_TYPES.map((p) => p.label),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1905,7 +1907,7 @@ export default function ClockworkCarpentryPage() {
         <div className="mb-8 sm:mb-10">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
-              DirectBuild cost check
+              Sydney Carpentry Cost Check
             </span>
             <span className="text-xs text-gray-text tabular-nums">
               {quote
@@ -2025,32 +2027,59 @@ function ProjectTypesStep({
   selectedLabels: string[];
   onToggle: (label: string) => void;
 }) {
+  const steps = [
+    "Choose your project",
+    "Upload a photo",
+    "See a realistic Sydney range",
+  ];
+
   return (
     <div>
+      <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
+        Sydney Carpentry Cost Check
+      </p>
       <h1 className="text-[1.75rem] sm:text-[2.25rem] font-bold leading-[1.1] text-white">
-        Get an Itemised Ballpark Quote Before You Speak to a Contractor
+        Tell us what you&apos;re planning.
+        <br />
+        Upload a photo. See what it could cost.
       </h1>
       <p className="mt-3 text-sm sm:text-base text-gray-text leading-relaxed max-w-[52ch]">
-        Select what you&apos;re planning. We&apos;ll ask a few quick questions and give you a
-        rough project range with the main cost drivers, likely scope items and what could
-        push the price up.
+        Choose your deck, pergola, cladding, outdoor upgrade or custom carpentry project,
+        then get a realistic Sydney ballpark range before speaking with a contractor.
       </p>
+      <p className="mt-3 text-xs sm:text-sm text-gray-text leading-relaxed">
+        Takes about 60 seconds. No obligation. Your enquiry goes to Clockwork Carpentry.
+      </p>
+
+      <ol className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        {steps.map((step, index) => (
+          <li
+            key={step}
+            className="flex items-center gap-3 rounded-xl border border-gray-light bg-gray-mid px-3.5 py-3"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-safety text-xs font-bold text-black-deep">
+              {index + 1}
+            </span>
+            <span className="text-sm font-medium text-white">{step}</span>
+          </li>
+        ))}
+      </ol>
 
       <div className="mt-7">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold text-white">
-            Select everything involved
+            What are you planning?
           </h2>
           <span className="text-xs text-gray-text">
             {selectedLabels.length} selected
           </span>
         </div>
         <p className="mt-1 text-xs text-gray-text">
-          Pick all that apply — we&apos;ll ask about each one.
+          Choose everything that applies.
         </p>
 
         <ul className="mt-4 grid gap-2.5">
-          {PROJECT_TYPES.map((opt) => {
+          {HOMEOWNER_PROJECT_TYPES.map((opt) => {
             const isSelected = selectedLabels.includes(opt.label);
             return (
               <li key={opt.id}>
@@ -2102,6 +2131,9 @@ function ProjectTypesStep({
             );
           })}
         </ul>
+        <p className="mt-4 text-xs text-gray-text leading-relaxed">
+          Cost check powered by DirectBuild. Carpentry enquiries go to Clockwork Carpentry.
+        </p>
       </div>
     </div>
   );
