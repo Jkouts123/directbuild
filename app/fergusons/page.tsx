@@ -193,6 +193,70 @@ const PROJECT_TYPES_STEP: Step = {
   options: PROJECT_TYPES.map((p) => p.label),
 };
 
+const QUALIFICATION_STEPS: Step[] = [
+  {
+    id: "project_intent",
+    kind: "single",
+    title: "What best describes what you’re trying to do?",
+    options: [
+      "Basic landscaping to finish the build / help with OC",
+      "Street appeal and front entry presentation",
+      "Practical backyard refresh",
+      "Outdoor entertaining / poolside upgrade",
+      "Full front and backyard transformation",
+      "Not sure yet",
+    ],
+  },
+  {
+    id: "delivery_intent",
+    kind: "single",
+    title: "How are you planning to handle the work?",
+    options: [
+      "I want a landscaper to handle the full job",
+      "I want help with the harder parts only",
+      "I’m comparing quotes",
+      "I’m likely to DIY or stage parts myself",
+      "Not sure yet",
+    ],
+  },
+  {
+    id: "budget_expectation",
+    kind: "single",
+    title: "What range are you expecting this project might sit in?",
+    options: [
+      "Under $15k",
+      "$15k-$30k",
+      "$30k-$60k",
+      "$60k-$100k",
+      "$100k+",
+      "I have no idea",
+    ],
+  },
+  {
+    id: "existing_quote_range",
+    kind: "single",
+    title: "Have you already received any quotes?",
+    options: [
+      "No quotes yet",
+      "Yes, under $30k",
+      "Yes, $30k-$60k",
+      "Yes, $60k+",
+      "Yes, but they felt too high",
+    ],
+  },
+];
+
+const PRIMARY_SCOPE_STEP: Step = {
+  id: "primary_scope",
+  kind: "single",
+  title: "Are these all part of one project now, or are some ideas for later?",
+  options: [
+    "All part of one project now",
+    "Main project now, extras later",
+    "Just exploring options",
+  ],
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Branch-specific step definitions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1061,7 +1125,7 @@ function branchMidpoint(branch: BranchKey, answers: AnswerMap): number | null {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
-// Quote builder (midpoint-based, fixed $10k display gap)
+// Quote builder (midpoint-based preliminary display range)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MIDPOINT_FLOOR = 10000;
@@ -1182,6 +1246,174 @@ function deriveContextWarnings(answers: AnswerMap): string[] {
   return warnings;
 }
 
+function stringAnswer(answers: AnswerMap, key: string): string {
+  const value = answers[key];
+  return typeof value === "string" ? value : "";
+}
+
+function isPracticalStagedLead(answers: AnswerMap): boolean {
+  const practicalIntents = new Set([
+    "Basic landscaping to finish the build / help with OC",
+    "Street appeal and front entry presentation",
+    "Practical backyard refresh",
+  ]);
+  const practicalBudgets = new Set(["Under $15k", "$15k-$30k"]);
+
+  return (
+    practicalIntents.has(stringAnswer(answers, "project_intent")) &&
+    practicalBudgets.has(stringAnswer(answers, "budget_expectation"))
+  );
+}
+
+function aggregateMidpoint(
+  numeric: { id: BranchKey; midpoint: number }[],
+  answers: AnswerMap,
+): number {
+  const rawSum = numeric.reduce((s, x) => s + x.midpoint, 0);
+  const primaryScope = stringAnswer(answers, "primary_scope");
+
+  if (numeric.length <= 1) {
+    return rawSum;
+  }
+
+  const sorted = [...numeric].sort((a, b) => b.midpoint - a.midpoint);
+  const primary = sorted[0].midpoint;
+  const extras = sorted.slice(1).reduce((s, x) => s + x.midpoint, 0);
+
+  if (primaryScope === "Just exploring options") {
+    return primary;
+  }
+
+  if (
+    isPracticalStagedLead(answers) ||
+    primaryScope === "Main project now, extras later"
+  ) {
+    return primary + extras * 0.25;
+  }
+
+  return rawSum;
+}
+
+function applyPracticalStagedInterpretation(rawMidpoint: number, answers: AnswerMap): number {
+  if (!isPracticalStagedLead(answers)) return rawMidpoint;
+
+  const budgetExpectation = stringAnswer(answers, "budget_expectation");
+  const practicalCeiling = budgetExpectation === "Under $15k" ? 18000 : 35000;
+  return Math.min(rawMidpoint, practicalCeiling);
+}
+
+function selectedScopeHasHighIntent(ids: BranchKey[], answers: AnswerMap): boolean {
+  if (
+    ids.some((id) =>
+      ["backyard", "poolside", "retaining", "paving", "drainage", "builder"].includes(id),
+    )
+  ) {
+    return true;
+  }
+
+  const unsureBestFit = Array.isArray(answers.unsure_best_fit)
+    ? (answers.unsure_best_fit as string[])
+    : [];
+
+  return unsureBestFit.some((scope) =>
+    ["Backyard upgrade", "Paving", "Retaining", "Drainage", "Pool area", "Commercial / builder support"].includes(scope),
+  );
+}
+
+function calculateLeadQualification(
+  branchIds: BranchKey[],
+  answers: AnswerMap,
+  photoCount: number,
+) {
+  const projectIntent = stringAnswer(answers, "project_intent");
+  const deliveryIntent = stringAnswer(answers, "delivery_intent");
+  const budgetExpectation = stringAnswer(answers, "budget_expectation");
+  const existingQuoteRange = stringAnswer(answers, "existing_quote_range");
+  const primaryScope = stringAnswer(answers, "primary_scope");
+  const timeline = stringAnswer(answers, "timeline");
+  const redFlags: string[] = [];
+  let leadScore = 0;
+
+  if (deliveryIntent === "I want a landscaper to handle the full job") leadScore += 30;
+  if (budgetExpectation === "$30k-$60k") leadScore += 20;
+  if (budgetExpectation === "$60k-$100k" || budgetExpectation === "$100k+") {
+    leadScore += 35;
+  }
+  if (timeline === "ASAP" || timeline === "1–3 months") leadScore += 15;
+  if (selectedScopeHasHighIntent(branchIds, answers)) leadScore += 15;
+  if (photoCount > 0) leadScore += 10;
+
+  if (deliveryIntent === "I’m likely to DIY or stage parts myself") {
+    leadScore -= 40;
+    redFlags.push("Likely to DIY or stage parts themselves");
+  }
+  if (existingQuoteRange === "Yes, but they felt too high") {
+    leadScore -= 25;
+    redFlags.push("Existing quotes felt too high");
+  }
+  if (budgetExpectation === "Under $15k" || budgetExpectation === "$15k-$30k") {
+    leadScore -= 20;
+    redFlags.push("Lower stated budget expectation");
+  }
+  if (projectIntent === "Basic landscaping to finish the build / help with OC") {
+    leadScore -= 20;
+    redFlags.push("Basic OC or build-completion intent");
+  }
+  if (deliveryIntent === "I want help with the harder parts only") {
+    leadScore -= 15;
+    redFlags.push("Wants help with harder parts only");
+  }
+  if (primaryScope === "Main project now, extras later") {
+    redFlags.push("Some selected scope may be staged later");
+  }
+  if (primaryScope === "Just exploring options") {
+    redFlags.push("Exploring options rather than one confirmed scope");
+  }
+
+  const qualificationStatus =
+    leadScore >= 60
+      ? "Qualified"
+      : leadScore >= 40
+        ? "Maybe/Nurture"
+        : "Low-fit/DIY-style";
+
+  let suggestedCallAngle =
+    "Start by confirming the intended scope, budget expectation and whether they want a contractor-led project.";
+
+  if (
+    projectIntent === "Basic landscaping to finish the build / help with OC" ||
+    projectIntent === "Street appeal and front entry presentation" ||
+    projectIntent === "Practical backyard refresh"
+  ) {
+    suggestedCallAngle =
+      "Sounds like you’re trying to get the property presentable for OC or move-in without overcapitalising. Is that right?";
+  } else if (
+    deliveryIntent === "I want a landscaper to handle the full job" &&
+    (budgetExpectation === "$60k-$100k" || budgetExpectation === "$100k+")
+  ) {
+    suggestedCallAngle =
+      "Looks like you’re considering a proper contractor-led landscaping project. Are you trying to get the whole scope handled in one go?";
+  } else if (deliveryIntent === "I’m likely to DIY or stage parts myself") {
+    suggestedCallAngle =
+      "It sounds like you may stage or DIY parts of this. Which pieces would you still want a landscaper to handle?";
+  } else if (existingQuoteRange === "Yes, but they felt too high") {
+    suggestedCallAngle =
+      "You’ve had pricing that felt high. Which parts of the scope are must-haves, and which could be simplified or staged?";
+  }
+
+  return {
+    lead_score: leadScore,
+    qualification_status: qualificationStatus,
+    red_flags: redFlags,
+    suggested_call_angle: suggestedCallAngle,
+    project_intent: projectIntent,
+    delivery_intent: deliveryIntent,
+    budget_expectation: budgetExpectation,
+    existing_quote_range: existingQuoteRange,
+    primary_scope: primaryScope,
+  };
+}
+
 function labelFor(id: BranchKey): string {
   return PROJECT_TYPES.find((p) => p.id === id)?.label ?? id;
 }
@@ -1230,7 +1462,10 @@ function buildQuote(
   }
 
   // ── Numeric (single or combined) ────────────────────────────────────────
-  const rawSum = numeric.reduce((s, x) => s + x.midpoint, 0);
+  const rawSum = applyPracticalStagedInterpretation(
+    aggregateMidpoint(numeric, answers),
+    answers,
+  );
   const midpoint = Math.max(MIDPOINT_FLOOR, roundToK(rawSum));
   const range_low = midpoint - 5000;
   const range_high = midpoint + 5000;
@@ -1238,12 +1473,15 @@ function buildQuote(
   const itemised_breakdown = buildItemisedBreakdown(midpoint);
 
   const numericLabels = numeric.map((n) => labelFor(n.id));
+  const practicalStaged = isPracticalStagedLead(answers);
   const summaryHead =
-    numericLabels.length === 1
+    practicalStaged
+      ? "Based on your answers, this looks closer to a practical completion / street-appeal project than a full premium transformation."
+      : numericLabels.length === 1
       ? `Most Sydney ${numericLabels[0].toLowerCase()} builds at this configuration land near ${formatK(midpoint)} AUD.`
       : `Combining ${numericLabels.join(", ")}: estimated near ${formatK(midpoint)} AUD.`;
   const summaryTail =
-    " We've narrowed to a $10k range you can sanity-check before any site visit.";
+    " Based on your answers, this looks like a broad preliminary range. Final pricing can shift depending on site access, levels, drainage, materials, measurements and final scope.";
   let summary = summaryHead + summaryTail;
 
   if (manualOnly.length > 0) {
@@ -1560,6 +1798,10 @@ export default function FergusonsPage() {
   const flow: Step[] = useMemo(() => {
     const steps: Step[] = [PROJECT_TYPES_STEP];
     if (selectedTypes.length === 0) return steps;
+    steps.push(...QUALIFICATION_STEPS);
+    if (selectedTypes.length > 1) {
+      steps.push(PRIMARY_SCOPE_STEP);
+    }
     for (const t of selectedTypes) {
       steps.push(...BRANCH_STEPS[t.id]);
     }
@@ -1602,6 +1844,10 @@ export default function FergusonsPage() {
             delete cleaned[s.id];
           }
         }
+      }
+      if (next.length <= 1 && cleaned.primary_scope) {
+        cleaned = cleaned === a ? { ...a } : cleaned;
+        delete cleaned.primary_scope;
       }
       return { ...cleaned, [PROJECT_TYPES_STEP.id]: next };
     });
@@ -1662,6 +1908,11 @@ export default function FergusonsPage() {
 
     const contact = isContactValue(answers.contact) ? answers.contact : null;
     const suburbEntry = isSuburbEntry(answers.suburb) ? answers.suburb : null;
+    const qualification = calculateLeadQualification(
+      selectedTypeIds,
+      answers,
+      photoFiles.length,
+    );
 
     const {
       contact: _c,
@@ -1685,6 +1936,7 @@ export default function FergusonsPage() {
       fbp: readCookie("_fbp"),
       fbc: getFbcFromUrlOrCookie(),
       event_source_url: getFergusonsEventSourceUrl(),
+      ...qualification,
       selected_project_types: selectedTypes.map((t) => ({
         id: t.id,
         label: t.label,
