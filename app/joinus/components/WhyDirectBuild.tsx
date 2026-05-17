@@ -10,13 +10,13 @@ export default function WhyDirectBuild() {
             Why DirectBuild
           </p>
           <h2 className="text-3xl sm:text-5xl lg:text-[56px] font-bold tracking-[-0.03em] leading-[1.05] text-slate-900">
-            Most agencies get paid before
-            <br className="hidden sm:block" /> you see a real job. We don’t.
+            Stop paying retainers before
+            <br className="hidden sm:block" /> you know the area can work.
           </h2>
           <p className="max-w-[58ch] text-base sm:text-lg text-slate-600 leading-[1.6]">
-            DirectBuild is built around private homeowner work that actually
-            proceeds — not retainers, not vague reports, not generic agency
-            output.
+            DirectBuild is built around measured homeowner enquiry tests in
+            selected trades and service areas — not generic retainers, vague
+            reports, or saturated local campaigns.
           </p>
         </header>
 

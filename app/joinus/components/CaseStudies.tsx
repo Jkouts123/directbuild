@@ -42,9 +42,9 @@ export default function CaseStudies() {
             Early results
           </p>
           <h2 className="text-3xl sm:text-5xl lg:text-[56px] font-bold tracking-[-0.03em] leading-[1.05]">
-            Early partners are already
+            Early partners are already turning enquiries
             <br className="hidden sm:block" />{" "}
-            <span className="text-orange-safety">closing real work.</span>
+            <span className="text-orange-safety">into real work.</span>
           </h2>
           <p className="max-w-[60ch] text-base sm:text-lg text-white/60 leading-[1.6]">
             DirectBuild is just opening partner intake, but early trade

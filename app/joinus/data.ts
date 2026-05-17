@@ -60,11 +60,11 @@ export const PROOF_STATS: { label: string; value: string }[] = [
 export const WHY_POINTS: { title: string; body: string }[] = [
   {
     title: "No retainer treadmill",
-    body: "We’re not selling generic retainers and vague monthly reports. The model only works if real homeowner work proceeds.",
+    body: "We’re not selling generic retainers before checking whether the trade, area, and job economics can support a real test.",
   },
   {
-    title: "Built around proceeded work",
-    body: "We care whether enquiries turn into real jobs — not clicks, impressions, or vanity dashboards.",
+    title: "Area fit before intake",
+    body: "We look at local signals, visible competitors, job value, capacity, and response speed before deciding whether DirectBuild can help.",
   },
   {
     title: "Limited by trade and area",
@@ -72,7 +72,7 @@ export const WHY_POINTS: { title: string; body: string }[] = [
   },
   {
     title: "Homeowner-ready enquiries",
-    body: "We qualify private homeowner interest before sending anything through, so your team isn’t burning hours on tyre-kickers.",
+    body: "When there is a fit, the goal is quote-ready homeowner opportunities your team can respond to quickly.",
   },
 ];
 
@@ -137,23 +137,23 @@ export const CASE_STUDIES: CaseStudy[] = [
 export const HOW_IT_WORKS: { step: string; title: string; body: string }[] = [
   {
     step: "01",
-    title: "Apply",
-    body: "Submit your trade, service area, capacity, and a few business details. Five minutes.",
+    title: "Submit your area",
+    body: "Share your trade, service area, capacity, and job economics so we can run an Area Fit Check.",
   },
   {
     step: "02",
-    title: "Review",
-    body: "We review whether your trade and service area are open for current DirectBuild intake.",
+    title: "Check the signals",
+    body: "We review local upgrade activity, property movement, competitor visibility, and business readiness.",
   },
   {
     step: "03",
-    title: "Match",
-    body: "If there’s a fit, we discuss how DirectBuild can help generate and track homeowner opportunities for you.",
+    title: "Decide fit",
+    body: "If the trade and area look testable, we discuss a measured homeowner enquiry test.",
   },
   {
     step: "04",
-    title: "Run",
-    body: "Approved partners are added to the priority pool for relevant homeowner work in their area.",
+    title: "Run carefully",
+    body: "Approved partners are added selectively, with no area saturation and no guaranteed-job promises.",
   },
 ];
 

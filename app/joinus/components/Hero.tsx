@@ -33,18 +33,17 @@ export default function Hero() {
           </p>
 
           <h1 className="text-[34px] sm:text-[56px] lg:text-[84px] font-bold leading-[1.02] sm:leading-[0.98] tracking-[-0.035em]">
-            Stop paying retainers for marketing that{" "}
-            <span className="text-orange-safety">never turns into</span> real
-            jobs.
+            Check if your trade + service area is{" "}
+            <span className="text-orange-safety">worth testing</span> with
+            DirectBuild.
           </h1>
 
           <p className="max-w-[58ch] text-base sm:text-lg lg:text-xl leading-[1.55] text-white/70">
-            DirectBuild is opening to a limited number of residential tradies
-            in selected trades and service areas. We help generate
-            homeowner-ready opportunities through DirectBuild, then work with
-            operators who can actually take them on.{" "}
-            <span className="text-white">No agency fluff.</span>{" "}
-            <span className="text-white">No monthly retainer treadmill.</span>
+            DirectBuild reviews selected residential trades by trade, area,
+            capacity, job value, and local market signals before we decide
+            whether we can help.{" "}
+            <span className="text-white">No retainer treadmill.</span>{" "}
+            <span className="text-white">No overclaiming before the area is checked.</span>
           </p>
 
           <div className="flex flex-wrap items-center gap-x-6 gap-y-4 pt-2">
@@ -52,14 +51,14 @@ export default function Hero() {
               href="#apply"
               className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-orange-safety px-7 min-h-[56px] text-base font-bold text-black-deep hover:bg-orange-hover active:scale-[0.99] transition-[background-color,transform] cursor-pointer"
             >
-              Apply for early access
+              Check my area fit
               <ArrowRight size={18} strokeWidth={2.25} />
             </a>
             <a
               href="#results"
               className="inline-flex items-center gap-2 text-sm sm:text-base font-semibold text-white/80 hover:text-white transition-colors cursor-pointer"
             >
-              See real results
+              See real client wins
               <ArrowDown size={16} strokeWidth={2} />
             </a>
           </div>

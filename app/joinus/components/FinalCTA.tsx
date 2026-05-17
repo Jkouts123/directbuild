@@ -30,7 +30,7 @@ export default function FinalCTA() {
             href="#apply"
             className="inline-flex items-center justify-center gap-2.5 rounded-lg bg-orange-safety px-7 sm:px-8 min-h-[56px] sm:min-h-[60px] text-base sm:text-lg font-bold text-black-deep hover:bg-orange-hover active:scale-[0.99] transition-[background-color,transform] cursor-pointer"
           >
-            Apply for early access
+            Check my area fit
             <ArrowRight size={20} strokeWidth={2.25} />
           </a>
         </div>

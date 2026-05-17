@@ -452,16 +452,15 @@ export default function EligibilityForm({
           <header className="space-y-4 sm:space-y-5 mb-10 sm:mb-12 lg:mb-14">
             <p className="inline-flex items-center gap-3 text-[11px] font-mono font-medium uppercase tracking-[0.22em] text-orange-safety">
               <span className="h-px w-8 bg-orange-safety" aria-hidden />
-              Application
+              Area Fit Check
             </p>
             <h2 className="text-3xl sm:text-5xl font-bold tracking-[-0.03em] leading-[1.05]">
-              Apply for the current{" "}
-              <span className="block sm:inline">DirectBuild intake.</span>
+              Check your trade + area fit.
             </h2>
             <p className="text-base sm:text-lg text-white/60 leading-[1.6] max-w-[58ch]">
-              We review applications by trade and area. If your trade and
-              service area are open for current intake, we’ll be in touch
-              about next steps.
+              Submit your trade, area, and business basics. If there is a fit,
+              DirectBuild will review whether your area can support a measured
+              homeowner enquiry test.
             </p>
           </header>
 

@@ -127,6 +127,11 @@ type ProjectType = {
   imageSrc?: string;
 };
 
+type ClockworkFunnelParams = Record<
+  string,
+  string | number | boolean | string[] | undefined
+>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Project type entry options
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1501,6 +1506,87 @@ function trackClockworkPageView(): void {
   clockworkPageViewTracked = true;
 }
 
+function shouldDebugClockworkFunnel(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("debugMeta") === "1" || params.get("debugFunnel") === "1";
+}
+
+function getClockworkAttributionParams() {
+  if (typeof window === "undefined") {
+    return {
+      page_url: "",
+      utm_source: "",
+      utm_medium: "",
+      utm_campaign: "",
+      utm_content: "",
+      utm_term: "",
+      fbclid_present: false,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return {
+    page_url: window.location.href,
+    utm_source: params.get("utm_source") ?? "",
+    utm_medium: params.get("utm_medium") ?? "",
+    utm_campaign: params.get("utm_campaign") ?? "",
+    utm_content: params.get("utm_content") ?? "",
+    utm_term: params.get("utm_term") ?? "",
+    fbclid_present: params.has("fbclid"),
+  };
+}
+
+function trackClockworkFunnelEvent(
+  eventName: string,
+  params: ClockworkFunnelParams = {},
+): void {
+  if (typeof window === "undefined") return;
+
+  const eventParams = {
+    vertical: "carpentry",
+    partner: "Clockwork Carpentry",
+    source_page: CLOCKWORK_META_ROUTE,
+    ...getClockworkAttributionParams(),
+    ...params,
+    timestamp: new Date().toISOString(),
+  };
+
+  try {
+    const gtag = (window as Window & {
+      gtag?: (command: "event", eventName: string, params: typeof eventParams) => void;
+    }).gtag;
+    if (typeof gtag === "function") {
+      gtag("event", eventName, eventParams);
+    }
+  } catch {
+    // Funnel tracking must never affect the user flow.
+  }
+
+  try {
+    if (typeof window.fbq === "function") {
+      window.fbq("trackCustom", eventName, eventParams);
+    }
+  } catch {
+    // Funnel tracking must never affect the user flow.
+  }
+
+  try {
+    const dataLayerWindow = window as Window & {
+      dataLayer?: Array<Record<string, unknown>>;
+    };
+    dataLayerWindow.dataLayer = dataLayerWindow.dataLayer ?? [];
+    dataLayerWindow.dataLayer.push({ event: eventName, ...eventParams });
+  } catch {
+    // Funnel tracking must never affect the user flow.
+  }
+
+  if (shouldDebugClockworkFunnel()) {
+    // eslint-disable-next-line no-console
+    console.log(`[Clockwork Funnel] ${eventName}`, eventParams);
+  }
+}
+
 function trackClockworkLead(metaEventId: unknown): void {
   if (typeof window === "undefined") return;
 
@@ -1729,9 +1815,21 @@ export default function ClockworkCarpentryPage() {
   const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
   const [pendingQuote, setPendingQuote] = useState<QuoteResult | null>(null);
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  const firedFunnelEventsRef = useRef<Set<string>>(new Set());
+
+  const fireFunnelOnce = (
+    key: string,
+    eventName: string,
+    params?: ClockworkFunnelParams,
+  ) => {
+    if (firedFunnelEventsRef.current.has(key)) return;
+    firedFunnelEventsRef.current.add(key);
+    trackClockworkFunnelEvent(eventName, params);
+  };
 
   useEffect(() => {
     trackClockworkPageView();
+    fireFunnelOnce("page_viewed", "clockwork_page_viewed");
   }, []);
 
   const selectedTypes = useMemo<ProjectType[]>(() => {
@@ -1770,37 +1868,84 @@ export default function ClockworkCarpentryPage() {
   const currentStep: Step | undefined = flow[stepIndex];
   const isLastStep =
     selectedTypes.length > 0 && stepIndex === flow.length - 1;
+  const selectedProjectLabels = useMemo(
+    () => selectedTypes.map((t) => t.label),
+    [selectedTypes],
+  );
+  const hasSelectedPhoto =
+    Array.isArray(answers.photos) && (answers.photos as File[]).length > 0;
+
+  useEffect(() => {
+    if (!currentStep) return;
+    if (currentStep.kind === "photos") {
+      fireFunnelOnce("photo_step_viewed", "clockwork_photo_step_viewed", {
+        selected_project_types: selectedProjectLabels,
+      });
+    }
+    if (currentStep.kind === "contact") {
+      fireFunnelOnce("contact_step_viewed", "clockwork_contact_step_viewed", {
+        selected_project_types: selectedProjectLabels,
+        has_photo: hasSelectedPhoto,
+      });
+    }
+  }, [currentStep, selectedProjectLabels, hasSelectedPhoto]);
+
+  useEffect(() => {
+    if (!quote) return;
+    fireFunnelOnce("quote_generated", "clockwork_quote_generated", {
+      selected_project_types: selectedProjectLabels,
+      estimated_range: quote.display_range,
+      confidence: quote.confidence,
+      has_photo: hasSelectedPhoto,
+    });
+  }, [quote, selectedProjectLabels, hasSelectedPhoto]);
+
+  const trackStepCompleted = (step: Step, index: number) => {
+    trackClockworkFunnelEvent("clockwork_step_completed", {
+      step_number: index + 1,
+      step_name: step.title,
+      selected_project_types: selectedProjectLabels,
+      has_photo: hasSelectedPhoto,
+    });
+  };
 
   const setAnswer = (key: string, value: AnswerValue) => {
     setAnswers((a) => ({ ...a, [key]: value }));
   };
 
   const handleToggleProjectType = (label: string) => {
-    setAnswers((a) => {
-      const existing = Array.isArray(a[PROJECT_TYPES_STEP.id])
-        ? (a[PROJECT_TYPES_STEP.id] as string[])
-        : [];
-      const isAdding = !existing.includes(label);
-      const next = isAdding
-        ? [...existing, label]
-        : existing.filter((x) => x !== label);
+    const existing = Array.isArray(answers[PROJECT_TYPES_STEP.id])
+      ? (answers[PROJECT_TYPES_STEP.id] as string[])
+      : [];
+    const isAdding = !existing.includes(label);
+    const next = isAdding
+      ? [...existing, label]
+      : existing.filter((x) => x !== label);
 
-      let cleaned: AnswerMap = a;
-      if (!isAdding) {
-        const removed = PROJECT_TYPES.find((p) => p.label === label);
-        if (removed) {
-          cleaned = { ...a };
-          for (const s of BRANCH_STEPS[removed.id]) {
-            delete cleaned[s.id];
-          }
+    let cleaned: AnswerMap = answers;
+    if (!isAdding) {
+      const removed = PROJECT_TYPES.find((p) => p.label === label);
+      if (removed) {
+        cleaned = { ...answers };
+        for (const s of BRANCH_STEPS[removed.id]) {
+          delete cleaned[s.id];
         }
       }
-      return { ...cleaned, [PROJECT_TYPES_STEP.id]: next };
+    }
+
+    fireFunnelOnce("cost_check_started", "clockwork_cost_check_started");
+    trackClockworkFunnelEvent("clockwork_project_selected", {
+      selected_project_types: next,
+      selected_count: next.length,
     });
+    setAnswers({ ...cleaned, [PROJECT_TYPES_STEP.id]: next });
   };
 
   const handleSingleSelect = (key: string, value: string) => {
     setAnswers((a) => ({ ...a, [key]: value }));
+    if (currentStep) {
+      trackStepCompleted(currentStep, stepIndex);
+    }
     window.setTimeout(() => {
       setStepIndex((s) => s + 1);
     }, 180);
@@ -1819,6 +1964,14 @@ export default function ClockworkCarpentryPage() {
   const handleAddPhotos = (files: FileList | null) => {
     if (!files) return;
     const incoming = Array.from(files);
+    if (incoming.length > 0) {
+      const existingCount = Array.isArray(answers.photos)
+        ? (answers.photos as File[]).length
+        : 0;
+      fireFunnelOnce("photo_selected", "clockwork_photo_selected", {
+        photo_count: existingCount + incoming.length,
+      });
+    }
     setAnswers((a) => {
       const existing = Array.isArray(a.photos) ? (a.photos as File[]) : [];
       return { ...a, photos: [...existing, ...incoming] };
@@ -1963,14 +2116,30 @@ export default function ClockworkCarpentryPage() {
     if (!currentStep) return;
     if (!isStepAnswered(currentStep, answers)) return;
     if (stepIndex < flow.length - 1) {
+      if (currentStep.kind === "photos" && !hasSelectedPhoto) {
+        fireFunnelOnce("photo_skipped", "clockwork_photo_skipped", {
+          selected_project_types: selectedProjectLabels,
+        });
+      }
+      trackStepCompleted(currentStep, stepIndex);
       setStepIndex(stepIndex + 1);
       return;
     }
 
     if (selectedTypeIds.length === 0) return;
+    if (currentStep.kind === "contact") {
+      trackClockworkFunnelEvent("clockwork_contact_submitted", {
+        selected_project_types: selectedProjectLabels,
+        has_photo: hasSelectedPhoto,
+      });
+    }
     const { payload, result, photoFiles } = buildSubmission();
 
     if (OTP_VERIFICATION_ENABLED) {
+      fireFunnelOnce("otp_started", "clockwork_otp_started", {
+        selected_project_types: selectedProjectLabels,
+        has_photo: hasSelectedPhoto,
+      });
       setPendingPayload(payload);
       setPendingPhotoFiles(photoFiles);
       setPendingQuote(result);
@@ -1992,6 +2161,10 @@ export default function ClockworkCarpentryPage() {
 
   const handleOTPVerified = () => {
     if (pendingPayload && pendingQuote) {
+      fireFunnelOnce("otp_verified", "clockwork_otp_verified", {
+        selected_project_types: selectedProjectLabels,
+        has_photo: pendingPhotoFiles.length > 0,
+      });
       setQuote(pendingQuote);
       void submitLeadWithUploadedPhotos(
         pendingPayload as Record<string, unknown>,
