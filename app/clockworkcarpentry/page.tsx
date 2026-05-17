@@ -2159,7 +2159,7 @@ function ProjectTypesStep({
 }) {
   const steps = [
     "Choose your project",
-    "Upload a photo",
+    "Upload a photo if you have one",
     "See a realistic Sydney range",
   ];
 
@@ -2168,17 +2168,18 @@ function ProjectTypesStep({
       <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
         Sydney Carpentry Cost Check
       </p>
-      <h1 className="text-[1.75rem] sm:text-[2.25rem] font-bold leading-[1.1] text-white">
+      <h1 className="text-[2.125rem] sm:text-[2.5rem] font-bold leading-[1.05] text-white">
         Tell us what you&apos;re planning.
         <br />
-        Upload a photo. See what it could cost.
+        See what it could cost.
       </h1>
       <p className="mt-3 text-sm sm:text-base text-gray-text leading-relaxed max-w-[52ch]">
-        Choose your deck, pergola, cladding, outdoor upgrade or custom carpentry project,
-        then get a realistic Sydney ballpark range before speaking with a contractor.
+        Choose your project, upload a photo if you have one, and get a realistic Sydney
+        ballpark range before speaking with a contractor.
       </p>
       <p className="mt-3 text-xs sm:text-sm text-gray-text leading-relaxed">
-        Takes about 60 seconds. No obligation. Your enquiry goes to Clockwork Carpentry.
+        Takes about 60 seconds. No obligation. Photo helps accuracy, but you can start
+        without one.
       </p>
 
       <ol className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -2196,6 +2197,21 @@ function ProjectTypesStep({
       </ol>
 
       <div className="mt-7">
+        <div className="mb-5 rounded-xl border border-gray-light bg-gray-mid/70 p-4">
+          <div className="text-[10px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
+            Example result
+          </div>
+          <div className="mt-2 text-sm font-semibold text-white">
+            Pergola / covered outdoor area
+          </div>
+          <div className="mt-1 text-sm text-gray-text">
+            Estimated range: <span className="font-medium text-white">$32k – $42k AUD</span>
+          </div>
+          <div className="mt-2 text-xs leading-relaxed text-gray-text">
+            Cost drivers: roof type, site access, materials, approvals
+          </div>
+        </div>
+
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold text-white">
             What are you planning?
@@ -2206,6 +2222,9 @@ function ProjectTypesStep({
         </div>
         <p className="mt-1 text-xs text-gray-text">
           Choose everything that applies.
+        </p>
+        <p className="mt-2 text-xs text-gray-text leading-relaxed">
+          Photo helps accuracy, but you can start without one.
         </p>
 
         <ul className="mt-4 grid gap-2.5">
