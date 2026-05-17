@@ -8,6 +8,10 @@ export type AreaOpportunityReport = {
   fitLabel: string;
   trade: string;
   serviceArea: string;
+  primaryRegionId?: string;
+  primaryRegionLabel?: string;
+  selectedRegionLabels?: string[];
+  dataLookupArea?: string;
   targetExtraJobs?: string;
   requiredQualifiedEnquiries?: string;
   projectedBookedRevenueRange?: string;
@@ -45,11 +49,19 @@ export type AreaOpportunityReport = {
       signalStrength?: "low" | "moderate" | "strong";
       dataBasis?: string;
     };
+    propertySales?: {
+      status: string;
+      serviceArea: string;
+      salesCount?: number;
+      medianSalePrice?: number;
+      propertyTurnoverSignal?: "low" | "moderate" | "strong";
+    };
   };
   copy: {
     areaSummary: string;
     competitorSummary: string;
     planningSummary: string;
+    propertySalesSummary?: string;
     revenueScenario: string;
     pipelineRisk: string;
     mainBottleneck?: string;
@@ -136,6 +148,7 @@ export default function OpportunityReport({
     ["Estimated gross profit", report.estimatedGrossProfitRange || undefined],
   ].filter((item): item is [string, string] => typeof item[1] === "string");
   const planning = report.signals?.planning;
+  const propertySales = report.signals?.propertySales;
   const planningKeywords =
     planning?.topDirectKeywords && planning.topDirectKeywords.length > 0
       ? planning.topDirectKeywords
@@ -146,6 +159,18 @@ export default function OpportunityReport({
       : planning?.signalStrength === "moderate"
         ? "Moderate"
         : "Low";
+  const propertyMovement =
+    propertySales?.propertyTurnoverSignal === "strong"
+      ? "Strong"
+      : propertySales?.propertyTurnoverSignal === "moderate"
+        ? "Moderate"
+        : propertySales?.propertyTurnoverSignal === "low"
+          ? "Low"
+          : "Pending";
+  const medianSalePrice =
+    typeof propertySales?.medianSalePrice === "number"
+      ? `$${Math.round(propertySales.medianSalePrice).toLocaleString("en-AU")}`
+      : "";
 
   return (
     <ReportShell>
@@ -226,6 +251,11 @@ export default function OpportunityReport({
           <ReportSection title="Planning data status">
             {report.copy.planningSummary}
           </ReportSection>
+          {report.copy.propertySalesSummary && (
+            <ReportSection title="Property movement">
+              {report.copy.propertySalesSummary}
+            </ReportSection>
+          )}
           {planning?.status === "success" && (
             <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
               <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
@@ -243,6 +273,21 @@ export default function OpportunityReport({
               <p className="text-sm sm:text-base leading-relaxed text-white/62">
                 Planning activity signal only, not guaranteed homeowner demand.
               </p>
+              {propertySales?.status === "success" && (
+                <>
+                  <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                    Property movement: {propertyMovement}
+                  </p>
+                  <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                    Recent sales: {propertySales.salesCount}
+                  </p>
+                  {medianSalePrice && (
+                    <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                      Median sale price: {medianSalePrice}
+                    </p>
+                  )}
+                </>
+              )}
             </section>
           )}
           <ReportSection title="Main bottleneck">

@@ -4,6 +4,7 @@ import {
   getNswPlanningUnavailableResult,
   getSupportedNswPlanningCouncil,
 } from "@/lib/data-sources/nswPlanning";
+import { getNswPropertySalesSignals } from "@/lib/data-sources/nswPropertySales";
 import { calculateOpportunityScore } from "@/lib/directbuild/opportunityScore";
 import { buildReportCopy } from "@/lib/directbuild/reportCopy";
 import {
@@ -303,6 +304,8 @@ export async function POST(request: Request) {
           primaryRegion,
         })
       : null;
+    const dataLookupArea =
+      nswPlanningArea?.serviceArea || primaryRegion?.exampleAreas[0] || serviceArea;
 
     if (!trade) {
       return errorResponse("trade_type is required.");
@@ -364,8 +367,46 @@ export async function POST(request: Request) {
                 : "NSW Planning connector is only enabled for supported NSW service areas.",
             }),
           );
+    const propertySalesPromise =
+      shouldCheckNswPlanning && dataLookupArea
+        ? getNswPropertySalesSignals({
+            serviceArea: dataLookupArea,
+          }).catch((error) => ({
+            source: "nsw_property_sales" as const,
+            status: "error" as const,
+            serviceArea: dataLookupArea,
+            salesCount: undefined,
+            medianSalePrice: undefined,
+            propertyTurnoverSignal: undefined,
+            summary: {
+              propertyTurnoverSignal: "pending" as const,
+            },
+            notes: [
+              "NSW property-sales data could not be checked in this request.",
+              "Unavailable property-sales data should be treated as pending, not as low property turnover.",
+            ],
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unknown NSW property sales data error.",
+          }))
+        : Promise.resolve({
+            source: "nsw_property_sales" as const,
+            status: "unavailable" as const,
+            serviceArea: dataLookupArea,
+            salesCount: undefined,
+            medianSalePrice: undefined,
+            propertyTurnoverSignal: undefined,
+            summary: {
+              propertyTurnoverSignal: "pending" as const,
+            },
+            notes: [
+              "NSW property-sales lookup is only enabled for supported NSW primary lookup areas.",
+              "Unavailable property-sales data should be treated as pending, not as low property turnover.",
+            ],
+          });
 
-    const [competitorResult, planningResult] = await Promise.all([
+    const [competitorResult, planningResult, propertySalesResult] = await Promise.all([
       getLocalCompetitors({
         trade: searchTrade,
         serviceArea: competitorSearchArea,
@@ -385,6 +426,7 @@ export async function POST(request: Request) {
             : "Unknown Google Places error.",
       })),
       planningPromise,
+      propertySalesPromise,
     ]);
 
     const score = calculateOpportunityScore({
@@ -427,6 +469,11 @@ export async function POST(request: Request) {
       regionFitNote: primaryRegion?.regionFitNote,
       selectedRegionLabels,
       primaryRegionLabel: primaryRegion?.label,
+      propertySalesStatus: propertySalesResult.status,
+      propertySalesServiceArea: propertySalesResult.serviceArea,
+      propertySalesCount: propertySalesResult.salesCount,
+      propertySalesMedianSalePrice: propertySalesResult.medianSalePrice,
+      propertyTurnoverSignal: propertySalesResult.propertyTurnoverSignal,
       scoreBreakdown: score.scoreBreakdown,
     });
     const scenario = calculateCommercialScenario({
@@ -447,6 +494,10 @@ export async function POST(request: Request) {
         serviceArea,
         serviceStates,
         serviceRegionIds,
+        primaryRegionId: primaryRegion?.id,
+        primaryRegionLabel: primaryRegion?.label,
+        selectedRegionLabels,
+        dataLookupArea,
         primaryRegion: primaryRegion
           ? {
               id: primaryRegion.id,
@@ -473,6 +524,7 @@ export async function POST(request: Request) {
         signals: {
           competitors: competitorResult,
           planning: planningResult,
+          propertySales: propertySalesResult,
         },
         copy,
       },

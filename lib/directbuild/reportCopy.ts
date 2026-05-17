@@ -24,6 +24,11 @@ type ReportCopyInput = {
   regionFitNote?: string;
   selectedRegionLabels?: string[];
   primaryRegionLabel?: string;
+  propertySalesStatus?: string;
+  propertySalesServiceArea?: string;
+  propertySalesCount?: number;
+  propertySalesMedianSalePrice?: number;
+  propertyTurnoverSignal?: "low" | "moderate" | "strong";
   planningDataPending?: boolean;
   scoreBreakdown?: {
     competitorGap: number;
@@ -37,6 +42,7 @@ export type ReportCopyResult = {
   areaSummary: string;
   competitorSummary: string;
   planningSummary: string;
+  propertySalesSummary: string;
   revenueScenario: string;
   pipelineRisk: string;
   mainBottleneck: string;
@@ -55,6 +61,10 @@ export type ReportCopyResult = {
 function formatMaybeNumber(value: number | null, fallback: string) {
   if (value === null) return fallback;
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatMoney(value: number) {
+  return `$${Math.round(value).toLocaleString("en-AU")}`;
 }
 
 function isYes(value?: string | boolean) {
@@ -108,6 +118,20 @@ function buildPlanningSummary(input: ReportCopyInput) {
       : "";
 
   return `NSW DA/CDC planning activity found.${keywordText} This is a planning activity signal, not guaranteed homeowner demand.`;
+}
+
+function buildPropertySalesSummary(input: ReportCopyInput) {
+  if (input.propertySalesStatus !== "success") {
+    return "Property movement data is pending/incomplete for this area. Treat this layer as incomplete rather than weak demand.";
+  }
+
+  const salesCount = input.propertySalesCount || 0;
+  const medianSalePrice =
+    typeof input.propertySalesMedianSalePrice === "number"
+      ? formatMoney(input.propertySalesMedianSalePrice)
+      : "unavailable";
+
+  return `Recent property movement found: ${salesCount} suburb-level sales, median sale price ${medianSalePrice}. Property movement can indicate upgrade triggers after purchase, but it is not guaranteed renovation demand.`;
 }
 
 function buildRevenueScenario(input: ReportCopyInput) {
@@ -260,6 +284,7 @@ export function buildReportCopy(input: ReportCopyInput): ReportCopyResult {
     }You appear best suited to a measured DirectBuild activation, not broad scaling yet. The first move should be validating ${regionFocus}, qualifying enquiries properly, and tracking quotes through to booked-job outcomes before increasing ad spend.`,
     competitorSummary: buildCompetitorSummary(input),
     planningSummary: buildPlanningSummary(input),
+    propertySalesSummary: buildPropertySalesSummary(input),
     revenueScenario: buildRevenueScenario(input),
     pipelineRisk: buildPipelineRisk(input),
     mainBottleneck: buildMainBottleneck(input),
