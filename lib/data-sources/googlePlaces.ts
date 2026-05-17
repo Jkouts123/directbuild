@@ -81,7 +81,9 @@ export async function getLocalCompetitors(
 ): Promise<GetLocalCompetitorsResult> {
   const trade = input.trade.trim();
   const serviceArea = input.serviceArea.trim();
-  const query = `${trade} ${serviceArea} NSW Australia`;
+  const query = /\baustralia\b/i.test(serviceArea)
+    ? `${trade} ${serviceArea}`
+    : `${trade} ${serviceArea} NSW Australia`;
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {

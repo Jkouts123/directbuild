@@ -14,11 +14,37 @@ export type AreaOpportunityReport = {
   estimatedAdWalletRange?: string;
   estimatedGrossProfitRange?: string | null;
   recommendedActivationLevel?: string;
+  primaryRegion?: {
+    id: string;
+    label: string;
+    state: string;
+    defaultCompetitorSearchArea: string;
+    regionFitNote: string;
+  } | null;
+  selectedRegions?: Array<{
+    id: string;
+    label: string;
+    state: string;
+  }>;
+  regionReviewNote?: string;
   scoreBreakdown: {
     competitorGap?: number;
     planningSignal?: number;
     businessEconomics?: number;
     capacityReadiness?: number;
+  };
+  signals?: {
+    planning?: {
+      status: string;
+      directApplicationCount?: number;
+      contextApplicationCount?: number;
+      relevantApplicationCount?: number;
+      topDirectKeywords?: string[];
+      topContextKeywords?: string[];
+      topMatchedKeywords?: string[];
+      signalStrength?: "low" | "moderate" | "strong";
+      dataBasis?: string;
+    };
   };
   copy: {
     areaSummary: string;
@@ -26,6 +52,15 @@ export type AreaOpportunityReport = {
     planningSummary: string;
     revenueScenario: string;
     pipelineRisk: string;
+    mainBottleneck?: string;
+    bestNextCampaignAngle?: string;
+    directBuildFitSummary?: string;
+    scoreBreakdownSummary?: {
+      businessEconomics: string;
+      capacityReadiness: string;
+      competitorPressure: string;
+      planningData: string;
+    };
     recommendedNextStep: string;
     disclaimers: string[];
   };
@@ -44,13 +79,25 @@ const LOADING_STEPS = [
   "Calculating pipeline scenario",
   "Preparing DirectBuild report",
 ];
+const MIN_LOADING_MS = 3000;
 
 export default function OpportunityReport({
   report,
   loading,
   error,
 }: OpportunityReportProps) {
-  if (loading) {
+  const [minimumLoadingDone, setMinimumLoadingDone] = useState(false);
+  const shouldShowLoading = loading || !minimumLoadingDone;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setMinimumLoadingDone(true);
+    }, MIN_LOADING_MS);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (shouldShowLoading) {
     return (
       <ReportShell>
         <ReportLoading />
@@ -80,12 +127,25 @@ export default function OpportunityReport({
 
   const topCards = [
     ["Opportunity score", `${report.score}/100`],
+    ["Recommended activation", report.recommendedActivationLevel],
+    ["Primary service region", report.primaryRegion?.label || report.serviceArea],
     ["Target extra jobs/month", report.targetExtraJobs],
     ["Required qualified enquiries/month", report.requiredQualifiedEnquiries],
     ["Projected booked revenue", report.projectedBookedRevenueRange],
     ["Estimated ad wallet", report.estimatedAdWalletRange],
     ["Estimated gross profit", report.estimatedGrossProfitRange || undefined],
   ].filter((item): item is [string, string] => typeof item[1] === "string");
+  const planning = report.signals?.planning;
+  const planningKeywords =
+    planning?.topDirectKeywords && planning.topDirectKeywords.length > 0
+      ? planning.topDirectKeywords
+      : planning?.topMatchedKeywords || [];
+  const planningStrength =
+    planning?.signalStrength === "strong"
+      ? "Strong"
+      : planning?.signalStrength === "moderate"
+        ? "Moderate"
+        : "Low";
 
   return (
     <ReportShell>
@@ -125,19 +185,79 @@ export default function OpportunityReport({
           can produce enough qualified enquiries. It is not a guaranteed cost
           per result.
         </p>
+        {report.regionReviewNote && (
+          <p className="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-3 text-sm leading-relaxed text-white/60">
+            {report.regionReviewNote}
+          </p>
+        )}
 
         <div className="grid gap-4">
           <ReportSection title="What this means">
             {report.copy.areaSummary}
           </ReportSection>
+          {report.copy.scoreBreakdownSummary && (
+            <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-3">
+              <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
+                Score breakdown
+              </h4>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <BreakdownItem
+                  label="Business economics"
+                  value={report.copy.scoreBreakdownSummary.businessEconomics}
+                />
+                <BreakdownItem
+                  label="Capacity readiness"
+                  value={report.copy.scoreBreakdownSummary.capacityReadiness}
+                />
+                <BreakdownItem
+                  label="Competitor pressure"
+                  value={report.copy.scoreBreakdownSummary.competitorPressure}
+                />
+                <BreakdownItem
+                  label="Planning data"
+                  value={report.copy.scoreBreakdownSummary.planningData}
+                />
+              </div>
+            </section>
+          )}
           <ReportSection title="Competitor visibility">
             {report.copy.competitorSummary}
           </ReportSection>
           <ReportSection title="Planning data status">
             {report.copy.planningSummary}
           </ReportSection>
+          {planning?.status === "success" && (
+            <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
+              <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
+                Supporting signals
+              </h4>
+              <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                NSW DA/CDC activity: {planningStrength}
+              </p>
+              {planningKeywords.length > 0 && (
+                <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                  Recently updated records included:{" "}
+                  {planningKeywords.join(", ")}.
+                </p>
+              )}
+              <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                Planning activity signal only, not guaranteed homeowner demand.
+              </p>
+            </section>
+          )}
+          <ReportSection title="Main bottleneck">
+            {report.copy.mainBottleneck || "Partner fit should be reviewed before activation."}
+          </ReportSection>
+          <ReportSection title="Best next campaign angle">
+            {report.copy.bestNextCampaignAngle ||
+              `Higher-value private residential ${report.trade} enquiries`}
+          </ReportSection>
           <ReportSection title="Pipeline risk">
             {report.copy.pipelineRisk}
+          </ReportSection>
+          <ReportSection title="DirectBuild fit summary">
+            {report.copy.directBuildFitSummary ||
+              "Your selected region may be suitable for DirectBuild partner review. The first move should be measured activation, qualification, follow-up, quote tracking, and booked-job visibility."}
           </ReportSection>
           <ReportSection title="Recommended next step">
             {report.copy.recommendedNextStep}
@@ -223,5 +343,16 @@ function ReportSection({
         {children}
       </p>
     </section>
+  );
+}
+
+function BreakdownItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-white/8 bg-black/15 px-3 py-3">
+      <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-white/38">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-white/78">{value}</p>
+    </div>
   );
 }

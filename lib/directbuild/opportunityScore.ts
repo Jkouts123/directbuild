@@ -1,4 +1,4 @@
-export type PlanningStatus = "success" | "error" | "no_results";
+export type PlanningStatus = "success" | "error" | "no_results" | "unavailable";
 
 export type OpportunityScoreInput = {
   competitorCount: number;
@@ -53,7 +53,9 @@ function scoreCompetitorGap(input: OpportunityScoreInput) {
 }
 
 function scorePlanningSignal(input: OpportunityScoreInput) {
-  if (input.planningStatus === "error") return 13;
+  if (input.planningStatus === "error" || input.planningStatus === "unavailable") {
+    return 13;
+  }
   if (input.planningStatus === "no_results") return 8;
 
   if (input.relevantApplicationCount >= 8) return 25;

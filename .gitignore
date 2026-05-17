@@ -13,6 +13,15 @@
 # testing
 /coverage
 
+# local data imports
+data/*
+!data/.gitkeep
+data/**/*.DAT
+data/**/*.dat
+data/**/*.zip
+data-cache/*.json
+!data-cache/.gitkeep
+
 # next.js
 /.next/
 /out/
@@ -57,9 +66,4 @@ app/Screenshot 2026-03-22 at 2.22.53*.png
 
 .env.local
 .env*.local
-# Local generated/raw NSW data
-data-cache/
-data/nsw-psi/
 
-# Local environment
-.env.local
