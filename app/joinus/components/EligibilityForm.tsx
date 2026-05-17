@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import PhoneVerify from "../../components/PhoneVerify";
 import { trackFacebookLead } from "../../components/FacebookPixel";
 import { sendJoinUsCapi } from "../../actions/joinus-capi";
 import { generateTradieId } from "@/lib/utils/ids";
+import type { AustralianState } from "@/lib/directbuild/geoTypes";
+import {
+  getServiceRegionById,
+  getServiceRegionsByIds,
+  groupServiceRegionsByState,
+} from "@/lib/directbuild/serviceRegions";
 import {
   TRADE_OPTIONS,
   JOB_VALUE_OPTIONS,
@@ -22,6 +28,8 @@ interface FormState {
   business_name: string;
   trade_type: string;
   service_area: string;
+  service_states: AustralianState[];
+  service_region_ids: string[];
   website: string;
   average_job_value: string;
   capacity_per_month: string;
@@ -41,6 +49,8 @@ const INITIAL: FormState = {
   business_name: "",
   trade_type: "",
   service_area: "",
+  service_states: [],
+  service_region_ids: [],
   website: "",
   average_job_value: "",
   capacity_per_month: "",
@@ -62,6 +72,16 @@ const LABEL = "block text-sm font-medium text-white/85 mb-2";
 const HINT = "text-xs text-white/45 mt-1.5";
 const OTP_REQUIRED = true;
 const MIN_REPORT_LOADING_MS = 3000;
+const SERVICE_STATE_OPTIONS: AustralianState[] = [
+  "NSW",
+  "VIC",
+  "QLD",
+  "WA",
+  "SA",
+  "TAS",
+  "ACT",
+  "NT",
+];
 
 const CLOSE_RATE_OPTIONS = ["Under 15%", "15–25%", "25–40%", "40%+", "Not sure"];
 const GROSS_MARGIN_OPTIONS = [
@@ -194,6 +214,7 @@ export default function EligibilityForm({
   const [report, setReport] = useState<AreaOpportunityReport | null>(null);
   const [reportError, setReportError] = useState("");
   const [generatingReport, setGeneratingReport] = useState(false);
+  const regionsByState = useMemo(() => groupServiceRegionsByState(), []);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((p) => ({
@@ -218,6 +239,47 @@ export default function EligibilityForm({
     });
   }
 
+  function syncServiceArea(regionIds: string[]) {
+    return getServiceRegionsByIds(regionIds)
+      .map((region) => region.label)
+      .join(", ");
+  }
+
+  function toggleServiceState(state: AustralianState) {
+    setForm((p) => {
+      const selected = p.service_states.includes(state);
+      const service_states = selected
+        ? p.service_states.filter((item) => item !== state)
+        : [...p.service_states, state];
+      const service_region_ids = selected
+        ? p.service_region_ids.filter(
+            (id) => getServiceRegionById(id)?.state !== state,
+          )
+        : p.service_region_ids;
+
+      return {
+        ...p,
+        service_states,
+        service_region_ids,
+        service_area: syncServiceArea(service_region_ids),
+      };
+    });
+  }
+
+  function toggleServiceRegion(regionId: string) {
+    setForm((p) => {
+      const service_region_ids = p.service_region_ids.includes(regionId)
+        ? p.service_region_ids.filter((id) => id !== regionId)
+        : [...p.service_region_ids, regionId];
+
+      return {
+        ...p,
+        service_region_ids,
+        service_area: syncServiceArea(service_region_ids),
+      };
+    });
+  }
+
   function handleAbnChange(next: AbnSelected | null) {
     setAbn(next);
     // Auto-fill business name from ABN selection if user hasn't typed one
@@ -238,12 +300,14 @@ export default function EligibilityForm({
       form.full_name.trim().length > 1 &&
       form.business_name.trim().length > 1 &&
       form.trade_type !== "" &&
-      form.service_area.trim().length > 1 &&
+      form.service_states.length > 0 &&
+      form.service_region_ids.length > 0 &&
       form.average_job_value !== "" &&
       form.capacity_per_month !== "" &&
       form.can_respond_24h !== "" &&
       isPhoneShape(form.phone) &&
-      isEmailShape(form.email)
+      isEmailShape(form.email) &&
+      Boolean(abn)
     );
   }
 
@@ -267,6 +331,7 @@ export default function EligibilityForm({
     // Also stored on the n8n payload as lead_event_id for audit/dedup.
     const leadEventId = crypto.randomUUID();
     const websiteNormalised = normaliseUrl(form.website);
+    const serviceArea = syncServiceArea(form.service_region_ids);
     const nowIso = new Date().toISOString();
 
     const payload = {
@@ -275,11 +340,13 @@ export default function EligibilityForm({
       full_name: form.full_name,
       business_name: form.business_name,
       trade_type: form.trade_type,
-      service_area: form.service_area,
+      service_states: form.service_states,
+      service_region_ids: form.service_region_ids,
+      service_area: serviceArea,
       // Mirror service_area into the existing fields the n8n branch reads
       // (CAPI custom_data, Sheets, Telegram) so historic mappings keep working.
-      location_based_in: form.service_area,
-      locations_serviced: form.service_area,
+      location_based_in: serviceArea,
+      locations_serviced: serviceArea,
       phone: form.phone,
       email: form.email,
       verified_phone: true,
@@ -350,6 +417,7 @@ export default function EligibilityForm({
     setReportError("");
 
     try {
+      const serviceArea = syncServiceArea(form.service_region_ids);
       const reportRequest = fetch("/api/joinus/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -358,7 +426,7 @@ export default function EligibilityForm({
           business_name: form.business_name,
           abn: abn ? abn.abn.replace(/\s/g, "") : "",
           trade_type: form.trade_type,
-          service_area: form.service_area,
+          service_area: serviceArea,
           website: normaliseUrl(form.website),
           average_job_value: form.average_job_value,
           capacity_per_month: form.capacity_per_month,
@@ -485,13 +553,12 @@ export default function EligibilityForm({
 
             <Field>
               <span className={LABEL}>
-                Verify your business{" "}
-                <span className="text-white/40">(optional)</span>
+                Verify your business ABN
               </span>
               <AbnSearch value={abn} onChange={handleAbnChange} />
               <p className={HINT}>
-                Search by business name or ABN. We use this to confirm
-                you’re operating under a registered Australian business.
+                We use this to confirm you operate under a registered
+                Australian business.
               </p>
             </Field>
 
@@ -536,20 +603,31 @@ export default function EligibilityForm({
             </Field>
 
             <Field>
-              <label htmlFor="service_area" className={LABEL}>
-                What areas can you reliably service?
-              </label>
-              <input
-                id="service_area"
-                type="text"
-                value={form.service_area}
-                onChange={(e) => update("service_area", e.target.value)}
-                placeholder="e.g. Inner West Sydney, Eastern Suburbs"
-                className={INPUT}
+              <span className={LABEL}>Which state/s do you service?</span>
+              <StateSelectGroup
+                value={form.service_states}
+                onChange={toggleServiceState}
+              />
+            </Field>
+
+            <Field>
+              <span className={LABEL}>
+                Where can you reliably take on private residential work?
+              </span>
+              <p className={HINT}>
+                Select the areas you can actually service. We use this to match
+                homeowner enquiries and check local market signals.
+              </p>
+              <p className={HINT}>Pick one or more service regions.</p>
+              <ServiceRegionSelectGroup
+                selectedStates={form.service_states}
+                value={form.service_region_ids}
+                regionsByState={regionsByState}
+                onChange={toggleServiceRegion}
               />
               <p className={HINT}>
-                Be specific. We match incoming homeowner enquiries against
-                this.
+                Selected service area:{" "}
+                {form.service_area || "Choose at least one region."}
               </p>
             </Field>
 
@@ -889,6 +967,94 @@ function MultiSelectGroup({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function StateSelectGroup({
+  value,
+  onChange,
+}: {
+  value: AustralianState[];
+  onChange: (v: AustralianState) => void;
+}) {
+  return (
+    <div className="grid grid-cols-4 gap-2.5" aria-label="service states">
+      {SERVICE_STATE_OPTIONS.map((state) => {
+        const selected = value.includes(state);
+        return (
+          <button
+            key={state}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(state)}
+            className={`rounded-lg border min-h-[52px] px-3 text-center text-sm font-bold transition-colors cursor-pointer ${
+              selected
+                ? "border-orange-safety bg-orange-safety/10 text-white"
+                : "border-white/12 bg-white/[0.04] text-white/70 hover:border-white/30 hover:bg-white/[0.07]"
+            }`}
+          >
+            {state}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ServiceRegionSelectGroup({
+  selectedStates,
+  value,
+  regionsByState,
+  onChange,
+}: {
+  selectedStates: AustralianState[];
+  value: string[];
+  regionsByState: ReturnType<typeof groupServiceRegionsByState>;
+  onChange: (v: string) => void;
+}) {
+  if (selectedStates.length === 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.025] px-4 py-4 text-sm text-white/50">
+        Select a state first to see available service regions.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-4">
+      {selectedStates.map((state) => (
+        <div key={state} className="space-y-2.5">
+          <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/45">
+            {state}
+          </p>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {regionsByState[state].map((region) => {
+              const selected = value.includes(region.id);
+              return (
+                <button
+                  key={region.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => onChange(region.id)}
+                  className={`rounded-lg border min-h-[58px] px-4 py-3 text-left transition-colors cursor-pointer ${
+                    selected
+                      ? "border-orange-safety bg-orange-safety/10 text-white"
+                      : "border-white/12 bg-white/[0.04] text-white/70 hover:border-white/30 hover:bg-white/[0.07]"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold leading-snug">
+                    {region.label}
+                  </span>
+                  <span className="mt-1 block text-xs leading-snug text-white/42">
+                    {region.exampleAreas.slice(0, 3).join(", ")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
