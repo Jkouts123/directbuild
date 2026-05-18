@@ -20,7 +20,9 @@ type ReportRequestBody = {
   trade_type?: unknown;
   service_area?: unknown;
   service_states?: unknown;
+  serviceStates?: unknown;
   service_region_ids?: unknown;
+  serviceRegionIds?: unknown;
   locations_serviced?: unknown;
   average_job_value?: unknown;
   capacity_per_month?: unknown;
@@ -284,8 +286,10 @@ export async function POST(request: Request) {
     const requestedServiceArea = normaliseServiceRegionInput(
       asString(body.service_area),
     );
-    const serviceRegionIds = asStringArray(body.service_region_ids);
-    const serviceStates = asStringArray(body.service_states);
+    const serviceRegionIds = asStringArray(
+      body.service_region_ids ?? body.serviceRegionIds,
+    );
+    const serviceStates = asStringArray(body.service_states ?? body.serviceStates);
     const selectedRegions = getServiceRegionsByIds(serviceRegionIds);
     const primaryRegion = selectedRegions[0];
     const selectedRegionLabels = selectedRegions.map((region) => region.label);

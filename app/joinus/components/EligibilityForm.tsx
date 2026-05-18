@@ -418,28 +418,40 @@ export default function EligibilityForm({
 
     try {
       const serviceArea = syncServiceArea(form.service_region_ids);
+      const reportPayload = {
+        full_name: form.full_name,
+        business_name: form.business_name,
+        abn: abn ? abn.abn.replace(/\s/g, "") : "",
+        trade_type: form.trade_type,
+        service_area: serviceArea,
+        service_states: form.service_states,
+        service_region_ids: form.service_region_ids,
+        website: normaliseUrl(form.website),
+        average_job_value: form.average_job_value,
+        capacity_per_month: form.capacity_per_month,
+        close_rate: form.close_rate,
+        can_respond_24h: form.can_respond_24h,
+        current_marketing_issue: form.current_marketing_issue,
+        gross_margin_range: form.gross_margin_range,
+        current_marketing_spend: form.current_marketing_spend,
+        preferred_job_types: form.preferred_job_types,
+        current_lead_sources: form.current_lead_sources,
+        phone: form.phone,
+        email: form.email,
+      };
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("joinus generate-report payload", {
+          service_states: reportPayload.service_states,
+          service_region_ids: reportPayload.service_region_ids,
+          service_area: reportPayload.service_area,
+        });
+      }
+
       const reportRequest = fetch("/api/joinus/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: form.full_name,
-          business_name: form.business_name,
-          abn: abn ? abn.abn.replace(/\s/g, "") : "",
-          trade_type: form.trade_type,
-          service_area: serviceArea,
-          website: normaliseUrl(form.website),
-          average_job_value: form.average_job_value,
-          capacity_per_month: form.capacity_per_month,
-          close_rate: form.close_rate,
-          can_respond_24h: form.can_respond_24h,
-          current_marketing_issue: form.current_marketing_issue,
-          gross_margin_range: form.gross_margin_range,
-          current_marketing_spend: form.current_marketing_spend,
-          preferred_job_types: form.preferred_job_types,
-          current_lead_sources: form.current_lead_sources,
-          phone: form.phone,
-          email: form.email,
-        }),
+        body: JSON.stringify(reportPayload),
       });
       const [res] = await Promise.all([
         reportRequest,
