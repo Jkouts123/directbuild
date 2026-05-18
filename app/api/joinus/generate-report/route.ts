@@ -238,26 +238,28 @@ function includesNswServiceArea(input: {
 
 function resolveNswPlanningArea(input: {
   serviceArea: string;
-  serviceRegionIds: string[];
   primaryRegion?: {
     id: string;
     label: string;
     defaultCompetitorSearchArea: string;
+    exampleAreas: string[];
+    planningLookup?: {
+      serviceArea: string;
+      councilName: string;
+    };
   } | null;
 }) {
-  if (
-    input.serviceRegionIds.includes("nsw-sydney-western-sydney") ||
-    input.primaryRegion?.id === "nsw-sydney-western-sydney" ||
-    input.serviceArea === "Sydney - Western Sydney"
-  ) {
+  if (input.primaryRegion?.planningLookup) {
     return {
-      serviceArea: "Penrith",
-      councilName: "Penrith City Council",
+      serviceArea: input.primaryRegion.planningLookup.serviceArea,
+      councilName: input.primaryRegion.planningLookup.councilName,
     };
   }
 
   const area =
-    input.primaryRegion?.defaultCompetitorSearchArea || input.serviceArea;
+    input.primaryRegion?.exampleAreas[0] ||
+    input.primaryRegion?.defaultCompetitorSearchArea ||
+    input.serviceArea;
   const councilName = getSupportedNswPlanningCouncil(area);
 
   return councilName
@@ -300,12 +302,12 @@ export async function POST(request: Request) {
     })
       ? resolveNswPlanningArea({
           serviceArea,
-          serviceRegionIds,
           primaryRegion,
         })
       : null;
     const dataLookupArea =
       nswPlanningArea?.serviceArea || primaryRegion?.exampleAreas[0] || serviceArea;
+    const planningUnavailableArea = primaryRegion?.exampleAreas[0] || dataLookupArea;
 
     if (!trade) {
       return errorResponse("trade_type is required.");
@@ -361,9 +363,11 @@ export async function POST(request: Request) {
         : Promise.resolve(
             getNswPlanningUnavailableResult({
               trade,
-              serviceArea,
+              serviceArea: planningUnavailableArea,
               reason: shouldCheckNswPlanning
-                ? "No supported NSW Planning council mapping exists for this service area yet."
+                ? primaryRegion
+                  ? `No supported NSW Planning council mapping exists yet for ${primaryRegion.label}.`
+                  : "No supported NSW Planning council mapping exists for this service area yet."
                 : "NSW Planning connector is only enabled for supported NSW service areas.",
             }),
           );
@@ -498,6 +502,8 @@ export async function POST(request: Request) {
         primaryRegionLabel: primaryRegion?.label,
         selectedRegionLabels,
         dataLookupArea,
+        planningServiceArea: nswPlanningArea?.serviceArea || planningUnavailableArea,
+        planningCouncilName: nswPlanningArea?.councilName,
         primaryRegion: primaryRegion
           ? {
               id: primaryRegion.id,
@@ -505,6 +511,7 @@ export async function POST(request: Request) {
               state: primaryRegion.state,
               defaultCompetitorSearchArea:
                 primaryRegion.defaultCompetitorSearchArea,
+              planningLookup: primaryRegion.planningLookup,
               regionFitNote: primaryRegion.regionFitNote,
             }
           : null,
@@ -513,6 +520,7 @@ export async function POST(request: Request) {
           label: region.label,
           state: region.state,
           defaultCompetitorSearchArea: region.defaultCompetitorSearchArea,
+          planningLookup: region.planningLookup,
           regionFitNote: region.regionFitNote,
         })),
         regionReviewNote:

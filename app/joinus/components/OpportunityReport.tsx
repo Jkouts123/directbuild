@@ -12,6 +12,8 @@ export type AreaOpportunityReport = {
   primaryRegionLabel?: string;
   selectedRegionLabels?: string[];
   dataLookupArea?: string;
+  planningServiceArea?: string;
+  planningCouncilName?: string;
   targetExtraJobs?: string;
   requiredQualifiedEnquiries?: string;
   projectedBookedRevenueRange?: string;
@@ -256,6 +258,24 @@ export default function OpportunityReport({
               {report.copy.propertySalesSummary}
             </ReportSection>
           )}
+          {propertySales?.status === "success" && (
+            <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
+              <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
+                Property movement
+              </h4>
+              <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                Signal: {propertyMovement}
+              </p>
+              <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                Recent sales: {propertySales.salesCount}
+              </p>
+              {medianSalePrice && (
+                <p className="text-sm sm:text-base leading-relaxed text-white/62">
+                  Median sale price: {medianSalePrice}
+                </p>
+              )}
+            </section>
+          )}
           {planning?.status === "success" && (
             <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
               <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
@@ -273,21 +293,6 @@ export default function OpportunityReport({
               <p className="text-sm sm:text-base leading-relaxed text-white/62">
                 Planning activity signal only, not guaranteed homeowner demand.
               </p>
-              {propertySales?.status === "success" && (
-                <>
-                  <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                    Property movement: {propertyMovement}
-                  </p>
-                  <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                    Recent sales: {propertySales.salesCount}
-                  </p>
-                  {medianSalePrice && (
-                    <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                      Median sale price: {medianSalePrice}
-                    </p>
-                  )}
-                </>
-              )}
             </section>
           )}
           <ReportSection title="Main bottleneck">

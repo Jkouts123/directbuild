@@ -20,6 +20,7 @@ type RegionSeed = {
   exampleAreas?: string[];
   lgas?: string[];
   defaultCompetitorSearchArea?: string;
+  planningLookup?: ServiceRegion["planningLookup"];
   regionFitNote?: string;
   intakeStatus?: ServiceRegion["intakeStatus"];
   absNotes?: string;
@@ -35,18 +36,18 @@ const REMOTE_NOTE =
   "A remote or dispersed market where DirectBuild should review travel time, service radius, and job economics before activation.";
 
 const seeds: RegionSeed[] = [
-  { label: "Sydney - Northern Beaches", state: "NSW", metro: "Sydney", aliases: ["Northern Beaches", "Manly", "Dee Why"], exampleAreas: ["Manly", "Brookvale", "Dee Why"], lgas: ["Northern Beaches"], regionFitNote: VALUE_NOTE },
-  { label: "Sydney - North Shore", state: "NSW", metro: "Sydney", aliases: ["North Shore", "Lower North Shore", "Upper North Shore"], exampleAreas: ["Chatswood", "Mosman", "Hornsby"], lgas: ["Ku-ring-gai", "Willoughby", "North Sydney", "Mosman", "Lane Cove", "Hornsby"], regionFitNote: VALUE_NOTE },
-  { label: "Sydney - Inner West", state: "NSW", metro: "Sydney", aliases: ["Inner West Sydney"], exampleAreas: ["Marrickville", "Leichhardt", "Ashfield"], lgas: ["Inner West"], regionFitNote: METRO_NOTE },
-  { label: "Sydney - Eastern Suburbs", state: "NSW", metro: "Sydney", aliases: ["Eastern Suburbs"], exampleAreas: ["Bondi", "Randwick", "Maroubra"], lgas: ["Waverley", "Randwick", "Woollahra"], regionFitNote: VALUE_NOTE },
-  { label: "Sydney - CBD / City Fringe", state: "NSW", metro: "Sydney", aliases: ["Sydney CBD", "City Fringe"], exampleAreas: ["Sydney", "Surry Hills", "Redfern"], lgas: ["City of Sydney"], regionFitNote: METRO_NOTE },
-  { label: "Sydney - Hills District", state: "NSW", metro: "Sydney", aliases: ["Hills District", "The Hills"], exampleAreas: ["Castle Hill", "Kellyville", "Baulkham Hills"], lgas: ["The Hills Shire"], regionFitNote: VALUE_NOTE },
+  { label: "Sydney - Northern Beaches", state: "NSW", metro: "Sydney", aliases: ["Northern Beaches", "Manly", "Dee Why"], exampleAreas: ["Manly", "Brookvale", "Dee Why"], lgas: ["Northern Beaches"], planningLookup: { serviceArea: "Dee Why", councilName: "Northern Beaches Council" }, regionFitNote: VALUE_NOTE },
+  { label: "Sydney - North Shore", state: "NSW", metro: "Sydney", aliases: ["North Shore", "Lower North Shore", "Upper North Shore"], exampleAreas: ["Chatswood", "Mosman", "Hornsby"], lgas: ["Ku-ring-gai", "Willoughby", "North Sydney", "Mosman", "Lane Cove", "Hornsby"], planningLookup: { serviceArea: "Chatswood", councilName: "Willoughby City Council" }, regionFitNote: VALUE_NOTE },
+  { label: "Sydney - Inner West", state: "NSW", metro: "Sydney", aliases: ["Inner West Sydney"], exampleAreas: ["Marrickville", "Leichhardt", "Ashfield"], lgas: ["Inner West"], planningLookup: { serviceArea: "Marrickville", councilName: "Inner West Council" }, regionFitNote: METRO_NOTE },
+  { label: "Sydney - Eastern Suburbs", state: "NSW", metro: "Sydney", aliases: ["Eastern Suburbs"], exampleAreas: ["Bondi", "Randwick", "Maroubra"], lgas: ["Waverley", "Randwick", "Woollahra"], planningLookup: { serviceArea: "Randwick", councilName: "Randwick City Council" }, regionFitNote: VALUE_NOTE },
+  { label: "Sydney - CBD / City Fringe", state: "NSW", metro: "Sydney", aliases: ["Sydney CBD", "City Fringe"], exampleAreas: ["Sydney", "Surry Hills", "Redfern"], lgas: ["City of Sydney"], planningLookup: { serviceArea: "Surry Hills", councilName: "City of Sydney" }, regionFitNote: METRO_NOTE },
+  { label: "Sydney - Hills District", state: "NSW", metro: "Sydney", aliases: ["Hills District", "The Hills"], exampleAreas: ["Castle Hill", "Kellyville", "Baulkham Hills"], lgas: ["The Hills Shire"], planningLookup: { serviceArea: "Castle Hill", councilName: "The Hills Shire Council" }, regionFitNote: VALUE_NOTE },
   { label: "Sydney - Parramatta / Greater West", state: "NSW", metro: "Sydney", aliases: ["Parramatta", "Greater West"], exampleAreas: ["Parramatta", "Westmead", "Greystanes"], lgas: ["City of Parramatta", "Cumberland"], regionFitNote: METRO_NOTE },
-  { label: "Sydney - Western Sydney", state: "NSW", metro: "Sydney", aliases: ["Western Sydney", "Penrith", "Blacktown"], exampleAreas: ["Penrith", "Blacktown", "Mount Druitt"], lgas: ["Penrith", "Blacktown"], regionFitNote: METRO_NOTE },
-  { label: "Sydney - South West", state: "NSW", metro: "Sydney", aliases: ["South West Sydney"], exampleAreas: ["Liverpool", "Fairfield", "Bankstown"], lgas: ["Liverpool", "Fairfield", "Canterbury-Bankstown"], regionFitNote: METRO_NOTE },
+  { label: "Sydney - Western Sydney", state: "NSW", metro: "Sydney", aliases: ["Western Sydney", "Penrith", "Blacktown"], exampleAreas: ["Penrith", "Blacktown", "Mount Druitt"], lgas: ["Penrith", "Blacktown"], planningLookup: { serviceArea: "Penrith", councilName: "Penrith City Council" }, regionFitNote: METRO_NOTE },
+  { label: "Sydney - South West", state: "NSW", metro: "Sydney", aliases: ["South West Sydney"], exampleAreas: ["Liverpool", "Fairfield", "Bankstown"], lgas: ["Liverpool", "Fairfield", "Canterbury-Bankstown"], planningLookup: { serviceArea: "Liverpool", councilName: "Liverpool City Council" }, regionFitNote: METRO_NOTE },
   { label: "Sydney - Macarthur / Campbelltown", state: "NSW", metro: "Sydney", aliases: ["Macarthur", "Campbelltown"], exampleAreas: ["Campbelltown", "Camden", "Narellan"], lgas: ["Campbelltown", "Camden"], regionFitNote: METRO_NOTE },
-  { label: "Sydney - Sutherland Shire", state: "NSW", metro: "Sydney", aliases: ["Sutherland Shire", "The Shire"], exampleAreas: ["Sutherland", "Cronulla", "Miranda"], lgas: ["Sutherland Shire"], regionFitNote: VALUE_NOTE },
-  { label: "Sydney - St George / Canterbury-Bankstown", state: "NSW", metro: "Sydney", aliases: ["St George", "Canterbury Bankstown"], exampleAreas: ["Hurstville", "Kogarah", "Bankstown"], lgas: ["Georges River", "Bayside", "Canterbury-Bankstown"], regionFitNote: METRO_NOTE },
+  { label: "Sydney - Sutherland Shire", state: "NSW", metro: "Sydney", aliases: ["Sutherland Shire", "The Shire"], exampleAreas: ["Sutherland", "Cronulla", "Miranda"], lgas: ["Sutherland Shire"], planningLookup: { serviceArea: "Miranda", councilName: "Sutherland Shire Council" }, regionFitNote: VALUE_NOTE },
+  { label: "Sydney - St George / Canterbury-Bankstown", state: "NSW", metro: "Sydney", aliases: ["St George", "Canterbury Bankstown"], exampleAreas: ["Hurstville", "Kogarah", "Bankstown"], lgas: ["Georges River", "Bayside", "Canterbury-Bankstown"], planningLookup: { serviceArea: "Bankstown", councilName: "Canterbury-Bankstown Council" }, regionFitNote: METRO_NOTE },
   { label: "Central Coast", state: "NSW", regionType: "regional_area", aliases: ["Gosford", "Wyong"], exampleAreas: ["Gosford", "Terrigal", "Wyong"], lgas: ["Central Coast"], regionFitNote: REGIONAL_NOTE },
   { label: "Newcastle / Lake Macquarie", state: "NSW", regionType: "regional_city", aliases: ["Newcastle", "Lake Macquarie"], exampleAreas: ["Newcastle", "Charlestown", "Belmont"], lgas: ["Newcastle", "Lake Macquarie"], regionFitNote: REGIONAL_NOTE },
   { label: "Hunter Valley", state: "NSW", regionType: "regional_area", aliases: ["Hunter", "Maitland", "Cessnock"], exampleAreas: ["Maitland", "Cessnock", "Singleton"], lgas: ["Maitland", "Cessnock", "Singleton", "Muswellbrook"], regionFitNote: REGIONAL_NOTE },
@@ -194,6 +195,7 @@ export const SERVICE_REGIONS: ServiceRegion[] = seeds.map((seed) => ({
   defaultCompetitorSearchArea:
     seed.defaultCompetitorSearchArea ||
     `${seed.exampleAreas?.[0] || seed.label}, ${seed.state}, Australia`,
+  planningLookup: seed.planningLookup,
   regionFitNote: seed.regionFitNote || REGIONAL_NOTE,
   intakeStatus: seed.intakeStatus || "open",
 }));

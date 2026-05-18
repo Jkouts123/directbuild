@@ -29,6 +29,10 @@ export type ServiceRegion = {
     notes?: string;
   };
   defaultCompetitorSearchArea: string;
+  planningLookup?: {
+    serviceArea: string;
+    councilName: string;
+  };
   regionFitNote: string;
   intakeStatus: "open" | "reviewing" | "limited" | "not_active";
 };
