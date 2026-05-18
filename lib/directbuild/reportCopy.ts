@@ -277,11 +277,11 @@ export function buildReportCopy(input: ReportCopyInput): ReportCopyResult {
   const regionFocus = input.primaryRegionLabel || input.serviceArea;
 
   return {
-    areaSummary: `${
+    areaSummary: `This area has enough local proof to justify a measured test, but not broad scaling yet. The first move is to validate enquiry quality, quote follow-up, and booked-job conversion in ${regionFocus} before increasing ad spend.${
       multipleRegions
-        ? "Because multiple regions were selected, DirectBuild should review which region to activate first rather than spreading spend too thin. "
+        ? " Because multiple regions were selected, start with the primary region before spreading budget wider."
         : ""
-    }You appear best suited to a measured DirectBuild activation, not broad scaling yet. The first move should be validating ${regionFocus}, qualifying enquiries properly, and tracking quotes through to booked-job outcomes before increasing ad spend.`,
+    }`,
     competitorSummary: buildCompetitorSummary(input),
     planningSummary: buildPlanningSummary(input),
     propertySalesSummary: buildPropertySalesSummary(input),
@@ -295,9 +295,8 @@ export function buildReportCopy(input: ReportCopyInput): ReportCopyResult {
       "Confirm the job mix, economics, and service-area coverage. Then run a measured DirectBuild activation with qualification, follow-up, quote tracking, and booked-job visibility in place.",
     disclaimers: [
       "Scenario only, based on supplied inputs and available signals.",
-      "Not a guarantee of demand, lead volume, revenue, profit, or booked work.",
-      "Competitor visibility is a market presence signal, not a full market-size estimate.",
-      "Ad wallet estimates are subject to campaign testing and actual enquiry quality.",
+      "Not a guarantee of demand, lead volume, profit, or booked work.",
+      "Ad wallet estimates require campaign testing.",
     ],
   };
 }

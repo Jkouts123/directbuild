@@ -40,6 +40,14 @@ export type AreaOpportunityReport = {
     capacityReadiness?: number;
   };
   signals?: {
+    competitors?: {
+      status: string;
+      summary?: {
+        competitorCount?: number;
+        averageRating?: number | null;
+        averageReviewCount?: number | null;
+      };
+    };
     planning?: {
       status: string;
       directApplicationCount?: number;
@@ -142,13 +150,13 @@ export default function OpportunityReport({
   const topCards = [
     ["Opportunity score", `${report.score}/100`],
     ["Recommended activation", report.recommendedActivationLevel],
-    ["Primary service region", report.primaryRegion?.label || report.serviceArea],
     ["Target extra jobs/month", report.targetExtraJobs],
     ["Required qualified enquiries/month", report.requiredQualifiedEnquiries],
     ["Projected booked revenue", report.projectedBookedRevenueRange],
     ["Estimated ad wallet", report.estimatedAdWalletRange],
     ["Estimated gross profit", report.estimatedGrossProfitRange || undefined],
   ].filter((item): item is [string, string] => typeof item[1] === "string");
+  const competitors = report.signals?.competitors;
   const planning = report.signals?.planning;
   const propertySales = report.signals?.propertySales;
   const planningKeywords =
@@ -160,9 +168,20 @@ export default function OpportunityReport({
       ? "Strong"
       : planning?.signalStrength === "moderate"
         ? "Moderate"
-        : "Low";
+        : planning?.signalStrength === "low"
+          ? "Light"
+          : "Pending";
+  const trimmedPlanningKeywords = planningKeywords.slice(0, 4);
+  const hasHighValueLowMovement =
+    propertySales?.propertyTurnoverSignal === "low" &&
+    typeof propertySales.salesCount === "number" &&
+    propertySales.salesCount > 0 &&
+    typeof propertySales.medianSalePrice === "number" &&
+    propertySales.medianSalePrice > 1000000;
   const propertyMovement =
-    propertySales?.propertyTurnoverSignal === "strong"
+    hasHighValueLowMovement
+      ? "Limited but high-value"
+      : propertySales?.propertyTurnoverSignal === "strong"
       ? "Strong"
       : propertySales?.propertyTurnoverSignal === "moderate"
         ? "Moderate"
@@ -173,6 +192,14 @@ export default function OpportunityReport({
     typeof propertySales?.medianSalePrice === "number"
       ? `$${Math.round(propertySales.medianSalePrice).toLocaleString("en-AU")}`
       : "";
+  const averageRating =
+    typeof competitors?.summary?.averageRating === "number"
+      ? competitors.summary.averageRating.toFixed(1)
+      : "n/a";
+  const averageReviewCount =
+    typeof competitors?.summary?.averageReviewCount === "number"
+      ? Math.round(competitors.summary.averageReviewCount).toLocaleString("en-AU")
+      : "n/a";
 
   return (
     <ReportShell>
@@ -207,10 +234,29 @@ export default function OpportunityReport({
           </div>
         )}
 
+        <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
+          <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
+            Lookup focus
+          </h4>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <BreakdownItem
+              label="Primary region"
+              value={report.primaryRegionLabel || report.primaryRegion?.label || report.serviceArea}
+            />
+            <BreakdownItem
+              label="Data lookup area"
+              value={report.dataLookupArea || report.primaryRegion?.label || report.serviceArea}
+            />
+            <BreakdownItem
+              label="Planning council"
+              value={report.planningCouncilName || "Pending"}
+            />
+          </div>
+        </section>
+
         <p className="rounded-lg border border-orange-safety/20 bg-orange-safety/10 px-4 py-3 text-sm leading-relaxed text-white/72">
-          This is the level of ad wallet likely needed to test whether the area
-          can produce enough qualified enquiries. It is not a guaranteed cost
-          per result.
+          Use the commercial cards as a test scenario. The ad wallet is a
+          starting point to validate enquiry quality, not a promised result.
         </p>
         {report.regionReviewNote && (
           <p className="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-3 text-sm leading-relaxed text-white/60">
@@ -247,54 +293,74 @@ export default function OpportunityReport({
               </div>
             </section>
           )}
-          <ReportSection title="Competitor visibility">
-            {report.copy.competitorSummary}
-          </ReportSection>
-          <ReportSection title="Planning data status">
-            {report.copy.planningSummary}
-          </ReportSection>
-          {report.copy.propertySalesSummary && (
-            <ReportSection title="Property movement">
-              {report.copy.propertySalesSummary}
-            </ReportSection>
-          )}
-          {propertySales?.status === "success" && (
-            <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
-              <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
-                Property movement
-              </h4>
-              <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                Signal: {propertyMovement}
-              </p>
-              <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                Recent sales: {propertySales.salesCount}
-              </p>
-              {medianSalePrice && (
-                <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                  Median sale price: {medianSalePrice}
-                </p>
-              )}
-            </section>
-          )}
-          {planning?.status === "success" && (
-            <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-2">
-              <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
-                Supporting signals
-              </h4>
-              <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                NSW DA/CDC activity: {planningStrength}
-              </p>
-              {planningKeywords.length > 0 && (
-                <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                  Recently updated records included:{" "}
-                  {planningKeywords.join(", ")}.
-                </p>
-              )}
-              <p className="text-sm sm:text-base leading-relaxed text-white/62">
-                Planning activity signal only, not guaranteed homeowner demand.
-              </p>
-            </section>
-          )}
+          <section className="rounded-lg border border-white/10 bg-white/[0.025] p-4 space-y-3">
+            <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
+              Local proof signals
+            </h4>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <SignalCard
+                title="Planning activity"
+                status={planning?.status === "success" ? "Active" : "Pending"}
+                rows={
+                  planning?.status === "success"
+                    ? [
+                        ["Signal", planningStrength],
+                        [
+                          "Relevant records",
+                          String(planning.relevantApplicationCount ?? 0),
+                        ],
+                        [
+                          "Matched work types",
+                          trimmedPlanningKeywords.length > 0
+                            ? trimmedPlanningKeywords.join(", ")
+                            : "n/a",
+                        ],
+                      ]
+                    : [["Status", "Pending/incomplete"]]
+                }
+                note={
+                  planning?.status === "success"
+                    ? "Public NSW planning records show residential improvement activity in this lookup area."
+                    : "Planning records are pending for this lookup area."
+                }
+              />
+              <SignalCard
+                title="Property movement"
+                status={propertySales?.status === "success" ? "Found" : "Pending"}
+                rows={
+                  propertySales?.status === "success"
+                    ? [
+                        ["Signal", propertyMovement],
+                        ["Recent sales", String(propertySales.salesCount ?? 0)],
+                        ["Median sale price", medianSalePrice || "n/a"],
+                      ]
+                    : [["Status", "Pending/incomplete"]]
+                }
+                note={
+                  propertySales?.status === "success"
+                    ? "Recent suburb-level sales can indicate upgrade triggers after purchase."
+                    : "Property movement data is pending for this lookup area."
+                }
+              />
+              <SignalCard
+                title="Competitor visibility"
+                status={competitors?.status === "success" ? "Found" : "Pending"}
+                rows={
+                  competitors?.status === "success"
+                    ? [
+                        [
+                          "Visible competitors",
+                          String(competitors.summary?.competitorCount ?? 0),
+                        ],
+                        ["Average rating", averageRating],
+                        ["Average review depth", averageReviewCount],
+                      ]
+                    : [["Status", "Pending/incomplete"]]
+                }
+                note="This shows market presence, not guaranteed demand."
+              />
+            </div>
+          </section>
           <ReportSection title="Main bottleneck">
             {report.copy.mainBottleneck || "Partner fit should be reviewed before activation."}
           </ReportSection>
@@ -373,6 +439,40 @@ function ReportShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.035] p-5 sm:p-8 lg:p-10">
       {children}
+    </div>
+  );
+}
+
+function SignalCard({
+  title,
+  status,
+  rows,
+  note,
+}: {
+  title: string;
+  status: string;
+  rows: Array<[string, string]>;
+  note: string;
+}) {
+  return (
+    <div className="rounded-lg border border-white/8 bg-black/15 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <h5 className="text-sm font-bold text-white/82">{title}</h5>
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.12em] text-white/52">
+          {status}
+        </span>
+      </div>
+      <dl className="mt-4 space-y-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="grid grid-cols-[1fr_auto] gap-3">
+            <dt className="text-xs text-white/45">{label}</dt>
+            <dd className="text-right text-xs font-semibold text-white/78">
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-4 text-xs leading-relaxed text-white/45">{note}</p>
     </div>
   );
 }
