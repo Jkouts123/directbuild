@@ -2206,7 +2206,7 @@ export default function ClockworkCarpentryPage() {
         <div className="absolute bottom-[-25%] left-[-15%] w-[50vw] h-[50vw] rounded-full bg-orange-safety/[0.025] blur-[120px]" />
       </div>
 
-      <div className="mx-auto w-full max-w-xl flex-1 flex flex-col px-5 sm:px-8 pt-8 sm:pt-12 pb-8">
+      <div className="mx-auto w-full max-w-xl flex-1 flex flex-col px-5 sm:px-8 pt-6 sm:pt-12 pb-28 sm:pb-8">
         <div className="mb-8 sm:mb-10">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
@@ -2292,7 +2292,7 @@ export default function ClockworkCarpentryPage() {
                 type="button"
                 onClick={goNext}
                 disabled={!isStepAnswered(currentStep, answers)}
-                className="inline-flex items-center gap-2 rounded-lg bg-orange-safety px-6 min-h-[48px] text-sm font-bold text-black-deep hover:bg-orange-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-safety"
+                className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-orange-safety px-6 min-h-[48px] text-sm font-bold text-black-deep hover:bg-orange-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-safety"
               >
                 {isLastStep ? "Generate My Ballpark Range" : "Next"}
                 <ArrowRight size={16} weight="bold" />
@@ -2314,6 +2314,24 @@ export default function ClockworkCarpentryPage() {
           onVerified={handleOTPVerified}
           onCancel={handleOTPCancel}
         />
+      )}
+
+      {!quote && currentStep && currentStep.kind !== "single" && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-light bg-black-deep/92 px-5 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 backdrop-blur-md sm:hidden">
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={!isStepAnswered(currentStep, answers)}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-safety px-6 min-h-[52px] text-sm font-bold text-black-deep hover:bg-orange-hover cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-orange-safety"
+          >
+            {stepIndex === 0 && selectedTypes.length === 0
+              ? "Start cost check"
+              : isLastStep
+                ? "Generate My Ballpark Range"
+                : "Continue"}
+            <ArrowRight size={16} weight="bold" />
+          </button>
+        </div>
       )}
     </section>
   );
@@ -2341,7 +2359,7 @@ function ProjectTypesStep({
       <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
         Sydney Carpentry Cost Check
       </p>
-      <h1 className="text-[2.125rem] sm:text-[2.5rem] font-bold leading-[1.05] text-white">
+      <h1 className="mt-2 text-[2.125rem] sm:text-[2.5rem] font-bold leading-[1.05] text-white">
         Tell us what you&apos;re planning.
         <br />
         See what it could cost.
@@ -2351,40 +2369,10 @@ function ProjectTypesStep({
         ballpark range before speaking with a contractor.
       </p>
       <p className="mt-3 text-xs sm:text-sm text-gray-text leading-relaxed">
-        Takes about 60 seconds. No obligation. Photo helps accuracy, but you can start
-        without one.
+        Takes about 60 seconds. No obligation. Enquiries go to Clockwork Carpentry.
       </p>
 
-      <ol className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-        {steps.map((step, index) => (
-          <li
-            key={step}
-            className="flex items-center gap-3 rounded-xl border border-gray-light bg-gray-mid px-3.5 py-3"
-          >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-safety text-xs font-bold text-black-deep">
-              {index + 1}
-            </span>
-            <span className="text-sm font-medium text-white">{step}</span>
-          </li>
-        ))}
-      </ol>
-
-      <div className="mt-7">
-        <div className="mb-5 rounded-xl border border-gray-light bg-gray-mid/70 p-4">
-          <div className="text-[10px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
-            Example result
-          </div>
-          <div className="mt-2 text-sm font-semibold text-white">
-            Pergola / covered outdoor area
-          </div>
-          <div className="mt-1 text-sm text-gray-text">
-            Estimated range: <span className="font-medium text-white">$32k – $42k AUD</span>
-          </div>
-          <div className="mt-2 text-xs leading-relaxed text-gray-text">
-            Cost drivers: roof type, site access, materials, approvals
-          </div>
-        </div>
-
+      <div className="mt-6">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold text-white">
             What are you planning?
@@ -2400,7 +2388,7 @@ function ProjectTypesStep({
           Photo helps accuracy, but you can start without one.
         </p>
 
-        <ul className="mt-4 grid gap-2.5">
+        <ul className="mt-3 grid gap-2">
           {HOMEOWNER_PROJECT_TYPES.map((opt) => {
             const isSelected = selectedLabels.includes(opt.label);
             return (
@@ -2409,7 +2397,7 @@ function ProjectTypesStep({
                   type="button"
                   onClick={() => onToggle(opt.label)}
                   className={[
-                    "group flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-colors min-h-[60px] cursor-pointer",
+                    "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors min-h-[52px] cursor-pointer sm:px-4 sm:py-3.5 sm:min-h-[60px]",
                     isSelected
                       ? "border-2 border-orange-safety bg-orange-safety/10"
                       : "border border-gray-light bg-gray-mid hover:border-orange-safety/50",
@@ -2417,7 +2405,7 @@ function ProjectTypesStep({
                 >
                   <span
                     className={[
-                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-colors",
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-colors sm:h-12 sm:w-12",
                       opt.imageSrc
                         ? "bg-gray-light/40"
                         : isSelected
@@ -2435,12 +2423,12 @@ function ProjectTypesStep({
                       <opt.icon size={20} weight="duotone" />
                     )}
                   </span>
-                  <span className="flex-1 text-sm sm:text-base font-medium text-white">
+                  <span className="flex-1 text-[13px] sm:text-base font-medium leading-snug text-white">
                     {opt.label}
                   </span>
                   <span
                     className={[
-                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors",
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors sm:h-6 sm:w-6",
                       isSelected
                         ? "border-orange-safety bg-orange-safety text-black-deep"
                         : "border-gray-light bg-transparent text-transparent",
@@ -2456,6 +2444,35 @@ function ProjectTypesStep({
         <p className="mt-4 text-xs text-gray-text leading-relaxed">
           Cost check powered by DirectBuild. Carpentry enquiries go to Clockwork Carpentry.
         </p>
+
+        <ol className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {steps.map((step, index) => (
+            <li
+              key={step}
+              className="flex items-center gap-3 rounded-xl border border-gray-light bg-gray-mid px-3.5 py-3"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-safety text-xs font-bold text-black-deep">
+                {index + 1}
+              </span>
+              <span className="text-sm font-medium text-white">{step}</span>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-4 rounded-xl border border-gray-light bg-gray-mid/70 p-4">
+          <div className="text-[10px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
+            Example result
+          </div>
+          <div className="mt-2 text-sm font-semibold text-white">
+            Pergola / covered outdoor area
+          </div>
+          <div className="mt-1 text-sm text-gray-text">
+            Estimated range: <span className="font-medium text-white">$32k – $42k AUD</span>
+          </div>
+          <div className="mt-2 text-xs leading-relaxed text-gray-text">
+            Cost drivers: roof type, site access, materials, approvals
+          </div>
+        </div>
       </div>
     </div>
   );
