@@ -188,8 +188,8 @@ const PROJECT_TYPES: ProjectType[] = [
 const PROJECT_TYPES_STEP: Step = {
   id: "__projectTypes",
   kind: "multi",
-  title: "Select everything involved",
-  hint: "Pick everything that's part of the project — we'll ask about each one.",
+  title: "Select what you want priced now",
+  hint: "Choose the main work for this stage. You can separate future ideas later.",
   options: PROJECT_TYPES.map((p) => p.label),
 };
 
@@ -1593,6 +1593,36 @@ function getFergusonsEventSourceUrl(): string {
   return window.location.href || "https://www.directbuild.au/fergusons";
 }
 
+function trackFergusonsEvent(
+  eventName: string,
+  params: Record<string, unknown> = {},
+): void {
+  if (typeof window === "undefined") return;
+
+  const fbq = (
+    window as Window & {
+      fbq?: (
+        eventType: string,
+        eventName: string,
+        parameters?: Record<string, unknown>,
+      ) => void;
+    }
+  ).fbq;
+
+  if (typeof fbq !== "function") return;
+
+  try {
+    fbq("trackCustom", eventName, {
+      source_page: "fergusons",
+      vertical: "landscaping",
+      client: "Fergusons Landscapes",
+      ...params,
+    });
+  } catch {
+    // Custom drop-off tracking should never affect the questionnaire.
+  }
+}
+
 function trackFergusonsLead(metaEventId: unknown): void {
   if (typeof window === "undefined") return;
 
@@ -1770,6 +1800,7 @@ export default function FergusonsPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const firedCustomEventsRef = useRef<Set<string>>(new Set());
 
   // Pending submission (held while OTP overlay is open)
   const [pendingPayload, setPendingPayload] = useState<Record<
@@ -1820,12 +1851,148 @@ export default function FergusonsPage() {
   const currentStep: Step | undefined = flow[stepIndex];
   const isLastStep =
     selectedTypes.length > 0 && stepIndex === flow.length - 1;
+  const hasPhotos =
+    Array.isArray(answers.photos) && (answers.photos as File[]).length > 0;
+  const photoCount = hasPhotos ? (answers.photos as File[]).length : 0;
+  const suburbValue = isSuburbEntry(answers.suburb)
+    ? `${answers.suburb.suburb}, ${answers.suburb.state} ${answers.suburb.postcode}`
+    : undefined;
+
+  const getTrackingParams = (
+    extra: Record<string, unknown> = {},
+    sourceAnswers: AnswerMap = answers,
+  ): Record<string, unknown> => {
+    const sourcePhotoCount = Array.isArray(sourceAnswers.photos)
+      ? (sourceAnswers.photos as File[]).length
+      : 0;
+    const sourceHasPhotos = sourcePhotoCount > 0;
+    const sourceSuburb = isSuburbEntry(sourceAnswers.suburb)
+      ? `${sourceAnswers.suburb.suburb}, ${sourceAnswers.suburb.state} ${sourceAnswers.suburb.postcode}`
+      : undefined;
+    const qualification =
+      selectedTypeIds.length > 0
+        ? calculateLeadQualification(selectedTypeIds, sourceAnswers, sourcePhotoCount)
+        : null;
+
+    return {
+      step_name: currentStep?.title,
+      step_number: currentStep ? stepIndex + 1 : undefined,
+      selected_project_type_count: selectedTypeIds.length,
+      selected_project_type_ids: selectedTypeIds,
+      project_intent: stringAnswer(sourceAnswers, "project_intent") || undefined,
+      delivery_intent: stringAnswer(sourceAnswers, "delivery_intent") || undefined,
+      budget_expectation:
+        stringAnswer(sourceAnswers, "budget_expectation") || undefined,
+      existing_quote_range:
+        stringAnswer(sourceAnswers, "existing_quote_range") || undefined,
+      primary_scope: stringAnswer(sourceAnswers, "primary_scope") || undefined,
+      suburb: sourceSuburb,
+      has_photos: sourceHasPhotos,
+      photo_count: sourcePhotoCount,
+      lead_score: qualification?.lead_score,
+      qualification_status: qualification?.qualification_status,
+      ...extra,
+    };
+  };
+
+  const trackOnce = (
+    key: string,
+    eventName: string,
+    extra?: Record<string, unknown>,
+    sourceAnswers?: AnswerMap,
+  ) => {
+    if (firedCustomEventsRef.current.has(key)) return;
+    firedCustomEventsRef.current.add(key);
+    trackFergusonsEvent(eventName, getTrackingParams(extra, sourceAnswers));
+  };
+
+  useEffect(() => {
+    if (!currentStep) return;
+    if (currentStep.kind === "photos") {
+      trackOnce("photo_step_viewed", "DB_Fergusons_PhotoStepViewed", {
+        step_name: currentStep.title,
+        step_number: stepIndex + 1,
+      });
+    }
+    if (currentStep.kind === "contact") {
+      trackOnce("contact_step_viewed", "DB_Fergusons_ContactStepViewed", {
+        step_name: currentStep.title,
+        step_number: stepIndex + 1,
+      });
+    }
+  }, [currentStep, stepIndex, selectedTypeIds, answers, hasPhotos, photoCount]);
+
+  useEffect(() => {
+    if (!quote) return;
+    trackOnce("estimate_viewed", "DB_Fergusons_EstimateViewed");
+  }, [quote, selectedTypeIds, answers, hasPhotos, photoCount]);
+
+  const isScopeCompletionStep = (step: Step, index: number) => {
+    if (step.id === PROJECT_TYPES_STEP.id) return false;
+    if (QUALIFICATION_STEPS.some((s) => s.id === step.id)) return false;
+    if (step.id === PRIMARY_SCOPE_STEP.id) return false;
+    if (SHARED_STEPS.some((s) => s.id === step.id)) return false;
+    return SHARED_STEPS.some((s) => s.id === flow[index + 1]?.id);
+  };
+
+  const trackCompletedStepEvents = (
+    step: Step,
+    index: number,
+    sourceAnswers: AnswerMap = answers,
+  ) => {
+    const params = {
+      step_name: step.title,
+      step_number: index + 1,
+    };
+
+    if (step.id === PROJECT_TYPES_STEP.id) {
+      trackOnce(
+        "project_step_completed",
+        "DB_Fergusons_ProjectStepCompleted",
+        params,
+        sourceAnswers,
+      );
+    }
+
+    const qualificationEndsHere =
+      step.id === "primary_scope" ||
+      (step.id === "existing_quote_range" &&
+        flow[index + 1]?.id !== PRIMARY_SCOPE_STEP.id);
+
+    if (qualificationEndsHere) {
+      trackOnce(
+        "qualification_step_completed",
+        "DB_Fergusons_QualificationStepCompleted",
+        params,
+        sourceAnswers,
+      );
+    }
+
+    if (isScopeCompletionStep(step, index)) {
+      trackOnce(
+        "scope_step_completed",
+        "DB_Fergusons_ScopeStepCompleted",
+        params,
+        sourceAnswers,
+      );
+    }
+
+    if (step.kind === "suburb") {
+      trackOnce(
+        "suburb_step_completed",
+        "DB_Fergusons_SuburbStepCompleted",
+        params,
+        sourceAnswers,
+      );
+    }
+  };
 
   const setAnswer = (key: string, value: AnswerValue) => {
     setAnswers((a) => ({ ...a, [key]: value }));
   };
 
   const handleToggleProjectType = (label: string) => {
+    trackOnce("started", "DB_Fergusons_Started");
     setAnswers((a) => {
       const existing = Array.isArray(a[PROJECT_TYPES_STEP.id])
         ? (a[PROJECT_TYPES_STEP.id] as string[])
@@ -1854,7 +2021,11 @@ export default function FergusonsPage() {
   };
 
   const handleSingleSelect = (key: string, value: string) => {
-    setAnswers((a) => ({ ...a, [key]: value }));
+    const nextAnswers = { ...answers, [key]: value };
+    if (currentStep) {
+      trackCompletedStepEvents(currentStep, stepIndex, nextAnswers);
+    }
+    setAnswers(nextAnswers);
     window.setTimeout(() => {
       setStepIndex((s) => s + 1);
     }, 180);
@@ -1873,6 +2044,12 @@ export default function FergusonsPage() {
   const handleAddPhotos = (files: FileList | null) => {
     if (!files) return;
     const incoming = Array.from(files);
+    if (incoming.length > 0) {
+      trackOnce("photo_uploaded", "DB_Fergusons_PhotoUploaded", {
+        has_photos: true,
+        photo_count: photoCount + incoming.length,
+      });
+    }
     setAnswers((a) => {
       const existing = Array.isArray(a.photos) ? (a.photos as File[]) : [];
       return { ...a, photos: [...existing, ...incoming] };
@@ -1995,6 +2172,7 @@ export default function FergusonsPage() {
     if (!currentStep) return;
     if (!isStepAnswered(currentStep, answers)) return;
     if (stepIndex < flow.length - 1) {
+      trackCompletedStepEvents(currentStep, stepIndex);
       setStepIndex(stepIndex + 1);
       return;
     }
@@ -2003,6 +2181,7 @@ export default function FergusonsPage() {
     const { payload, result, photoFiles } = buildSubmission();
 
     if (OTP_VERIFICATION_ENABLED) {
+      trackOnce("otp_requested", "DB_Fergusons_OTPRequested");
       setPendingPayload(payload);
       setPendingPhotoFiles(photoFiles);
       setPendingQuote(result);
@@ -2024,6 +2203,10 @@ export default function FergusonsPage() {
 
   const handleOTPVerified = () => {
     if (pendingPayload && pendingQuote) {
+      trackOnce("otp_verified", "DB_Fergusons_OTPVerified", {
+        has_photos: pendingPhotoFiles.length > 0,
+        photo_count: pendingPhotoFiles.length,
+      });
       setQuote(pendingQuote);
       void submitLeadWithUploadedPhotos(
         pendingPayload,
@@ -2228,14 +2411,14 @@ function ProjectTypesStep({
       <div className="mt-7">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold text-white">
-            Select everything involved
+            Select what you want priced now
           </h2>
           <span className="text-xs text-gray-text">
             {selectedLabels.length} selected
           </span>
         </div>
         <p className="mt-1 text-xs text-gray-text">
-          Pick all that apply — we&apos;ll ask about each one.
+          Choose the main work for this stage. You can separate future ideas later.
         </p>
 
         <ul className="mt-4 grid gap-2.5">
