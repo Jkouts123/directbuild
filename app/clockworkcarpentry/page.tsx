@@ -123,6 +123,7 @@ type QuoteResult = {
 type ProjectType = {
   id: BranchKey;
   label: string;
+  payloadLabel?: string;
   icon: PhosphorIcon;
   imageSrc?: string;
 };
@@ -151,19 +152,22 @@ const PROJECT_TYPES: ProjectType[] = [
   },
   {
     id: "screen",
-    label: "Timber screen or feature wall",
+    label: "Outdoor renovation / backyard transformation",
+    payloadLabel: "Timber screen or feature wall",
     icon: SquaresFour,
     imageSrc: "/clockworkcarpentry/timber-screen-feature-wall.jpg",
   },
   {
     id: "cladding",
-    label: "Cladding / facade upgrade",
+    label: "Feature cladding or timber detail",
+    payloadLabel: "Cladding / facade upgrade",
     icon: Buildings,
     imageSrc: "/clockworkcarpentry/cladding-facade-upgrade.jpg",
   },
   {
     id: "fitout",
-    label: "Internal fit-out / feature room",
+    label: "Internal renovation / feature room",
+    payloadLabel: "Internal fit-out / feature room",
     icon: House,
     imageSrc: "/clockworkcarpentry/internal-fitout-feature-room.jpg",
   },
@@ -175,7 +179,8 @@ const PROJECT_TYPES: ProjectType[] = [
   },
   {
     id: "builder",
-    label: "I'm a builder looking for a carpentry crew",
+    label: "Builder / designer / architect enquiry",
+    payloadLabel: "I'm a builder looking for a carpentry crew",
     icon: HardHat,
     imageSrc: "/clockworkcarpentry/builder-looking-for-crew.jpg",
   },
@@ -187,14 +192,12 @@ const PROJECT_TYPES: ProjectType[] = [
   },
 ];
 
-const HOMEOWNER_PROJECT_TYPES = PROJECT_TYPES.filter((p) => p.id !== "builder");
-
 const PROJECT_TYPES_STEP: Step = {
   id: "__projectTypes",
   kind: "multi",
   title: "Choose your project to start",
   hint: "Tap one or more options below.",
-  options: HOMEOWNER_PROJECT_TYPES.map((p) => p.label),
+  options: PROJECT_TYPES.map((p) => p.label),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -745,7 +748,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Stairs, balustrade and lighting extras",
     ],
     next_step:
-      "We'll review your details and connect you with a vetted Sydney carpentry team for a real quote — no obligation.",
+      "DirectBuild will review your details and, if the project looks suitable, connect the enquiry with Clockwork Carpentry Construction.",
   },
   pergola: {
     cost_drivers: [
@@ -755,7 +758,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Site access and council requirements",
     ],
     next_step:
-      "We'll review your details and connect you with a vetted Sydney carpentry team for a real quote.",
+      "DirectBuild will review your details and, if the project looks suitable, connect the enquiry with Clockwork Carpentry Construction.",
   },
   screen: {
     cost_drivers: [
@@ -765,7 +768,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Mounting and structural support",
     ],
     next_step:
-      "We'll review your scope and respond with a tailored ballpark, or connect you with a Sydney carpentry team.",
+      "DirectBuild will review your scope and respond with a tailored ballpark, or connect suitable enquiries with Clockwork Carpentry Construction.",
   },
   cladding: {
     cost_drivers: [
@@ -775,7 +778,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Scaffolding and access",
     ],
     next_step:
-      "We'll review your details and connect you with a Sydney carpentry team for a real cladding quote.",
+      "DirectBuild will review your details and, if the project looks suitable, connect the enquiry with Clockwork Carpentry Construction.",
   },
   fitout: {
     cost_drivers: [
@@ -785,7 +788,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Coordination with other trades",
     ],
     next_step:
-      "We'll review your scope and connect you with a Sydney carpentry team for a real quote.",
+      "DirectBuild will review your scope and, if the project looks suitable, connect the enquiry with Clockwork Carpentry Construction.",
   },
   framing: {
     cost_drivers: [
@@ -795,7 +798,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Crew size and timeline",
     ],
     next_step:
-      "We'll review your project details and respond with a tailored ballpark range, usually within one business day.",
+      "DirectBuild will review your project details and respond with a tailored ballpark range, usually within one business day.",
   },
   builder: {
     cost_drivers: [
@@ -805,7 +808,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Delivery preference (labour-only vs supply-and-install)",
     ],
     next_step:
-      "We'll review your details and come back with crew options that match your project type and timeline.",
+      "DirectBuild will review your details and come back with suitable next steps for the project type and timeline.",
   },
   unsure: {
     cost_drivers: [
@@ -814,7 +817,7 @@ const BRANCH_META: Record<BranchKey, { cost_drivers: string[]; next_step: string
       "Materials and finish ambition",
     ],
     next_step:
-      "We'll review your idea and respond with a tailored scope and ballpark range, usually within one business day.",
+      "DirectBuild will review your idea and respond with a tailored scope and ballpark range, usually within one business day.",
   },
 };
 
@@ -1378,10 +1381,10 @@ function buildQuote(
 
   const next_step =
     manualOnly.length > 0
-      ? "We'll review your full scope and connect you with a vetted Sydney carpentry team. The manually-reviewed scopes will get a tailored ballpark, usually within one business day."
+      ? "DirectBuild will review your full scope and prepare a tailored ballpark for the manually-reviewed items, usually within one business day. Suitable Sydney projects may be connected with Clockwork Carpentry Construction."
       : numeric.length === 1
         ? BRANCH_META[numeric[0].id].next_step
-        : "We'll review your details and connect you with a vetted Sydney carpentry team for a real quote.";
+        : "DirectBuild will review your details and, if the project looks suitable, connect the enquiry with Clockwork Carpentry Construction.";
 
   return {
     range_low,
@@ -2060,7 +2063,7 @@ export default function ClockworkCarpentryPage() {
       event_source_url: CLOCKWORK_EVENT_SOURCE_URL,
       selected_project_types: selectedTypes.map((t) => ({
         id: t.id,
-        label: t.label,
+        label: t.payloadLabel ?? t.label,
       })),
       selected_project_type_ids: selectedTypeIds,
       suburb_entry: suburbEntry,
@@ -2237,7 +2240,7 @@ export default function ClockworkCarpentryPage() {
         <div className="mb-8 sm:mb-10">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
-              Sydney Carpentry Cost Check
+              Sydney Construction & Carpentry Cost Check
             </span>
             <span className="text-xs text-gray-text tabular-nums">
               {quote
@@ -2326,7 +2329,7 @@ export default function ClockworkCarpentryPage() {
                   : stepIndex === 0
                     ? "Continue"
                     : isLastStep
-                      ? "Generate My Ballpark Range"
+                      ? "See My Ballpark Range"
                       : "Next"}
                 <ArrowRight size={16} weight="bold" />
               </button>
@@ -2337,7 +2340,8 @@ export default function ClockworkCarpentryPage() {
         <p className="mt-10 text-[11px] text-gray-text leading-relaxed">
           All figures are shown in AUD and are a ballpark guide only, not a fixed quote.
           Final pricing depends on site access, materials, engineering, approvals, finish
-          level and final scope.
+          level and final scope. Suitable construction, renovation and detailed carpentry
+          enquiries may be connected with Clockwork Carpentry Construction.
         </p>
       </div>
 
@@ -2360,7 +2364,7 @@ export default function ClockworkCarpentryPage() {
             {stepIndex === 0 && selectedTypes.length === 0
               ? "Select a project to continue"
               : isLastStep
-                ? "Generate My Ballpark Range"
+                ? "See My Ballpark Range"
                 : "Continue"}
             <ArrowRight size={16} weight="bold" />
           </button>
@@ -2390,10 +2394,10 @@ function ProjectTypesStep({
   return (
     <div>
       <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
-        Sydney Carpentry Cost Check
+        Sydney Construction & Carpentry Cost Check
       </p>
       <h1 className="mt-2 text-[2.125rem] sm:text-[2.5rem] font-bold leading-[1.05] text-white">
-        Tell us what you&apos;re planning.
+        Planning a deck, outdoor area or renovation project?
         <br />
         See what it could cost.
       </h1>
@@ -2402,7 +2406,8 @@ function ProjectTypesStep({
         ballpark range before speaking with a contractor.
       </p>
       <p className="mt-3 text-xs sm:text-sm text-gray-text leading-relaxed">
-        Takes about 60 seconds. No obligation. Enquiries go to Clockwork Carpentry.
+        Takes about 60 seconds. No obligation. DirectBuild cost check in partnership
+        with Clockwork Carpentry Construction.
       </p>
 
       <div className="mt-6">
@@ -2425,7 +2430,7 @@ function ProjectTypesStep({
         </p>
 
         <ul className="mt-3 grid gap-2">
-          {HOMEOWNER_PROJECT_TYPES.map((opt) => {
+          {PROJECT_TYPES.map((opt) => {
             const isSelected = selectedLabels.includes(opt.label);
             return (
               <li key={opt.id}>
@@ -2488,7 +2493,9 @@ function ProjectTypesStep({
           })}
         </ul>
         <p className="mt-4 text-xs text-gray-text leading-relaxed">
-          Cost check powered by DirectBuild. Carpentry enquiries go to Clockwork Carpentry.
+          DirectBuild helps organise the project details and rough cost range. Suitable
+          Sydney construction, renovation and detailed carpentry enquiries may be connected
+          with Clockwork Carpentry Construction.
         </p>
 
         <ol className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -2904,7 +2911,7 @@ function PhotosStep({
         className="flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-orange-safety/40 bg-orange-safety/5 px-6 min-h-[96px] text-base font-semibold text-orange-safety hover:border-orange-safety hover:bg-orange-safety/10 cursor-pointer"
       >
         <Upload size={22} weight="duotone" />
-        <span>Click to add photos or plans</span>
+        <span>Add photos or plans</span>
       </button>
       <input
         ref={inputRef}
@@ -2947,8 +2954,8 @@ function PhotosStep({
       <p className="mt-4 flex items-start gap-2 text-xs text-gray-text">
         <Info size={14} weight="duotone" className="mt-0.5 shrink-0" />
         <span>
-          Files stay on this device for now — we don&apos;t upload them yet. You can also send
-          photos through later if easier.
+          Photos are optional and only upload when you submit the range request. You can
+          also send photos through later if easier.
         </span>
       </p>
     </div>
@@ -3207,7 +3214,7 @@ function ResultScreen({
         </div>
         <div className="min-w-0">
           <div className="text-[10px] font-semibold tracking-[0.18em] uppercase text-orange-safety">
-            Your preliminary itemised ballpark quote
+            Your preliminary itemised ballpark range
           </div>
           <div className="mt-0.5 text-sm font-medium text-white truncate">
             {headerLabel}
