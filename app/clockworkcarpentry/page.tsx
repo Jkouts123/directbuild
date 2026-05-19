@@ -192,8 +192,8 @@ const HOMEOWNER_PROJECT_TYPES = PROJECT_TYPES.filter((p) => p.id !== "builder");
 const PROJECT_TYPES_STEP: Step = {
   id: "__projectTypes",
   kind: "multi",
-  title: "What are you planning?",
-  hint: "Choose everything that applies.",
+  title: "Choose your project to start",
+  hint: "Tap one or more options below.",
   options: HOMEOWNER_PROJECT_TYPES.map((p) => p.label),
 };
 
@@ -1408,11 +1408,15 @@ async function sendLeadToWebhook(payload: unknown): Promise<void> {
       body: JSON.stringify(payload),
     });
     const json = (await res.json().catch(() => ({}))) as unknown;
-    // eslint-disable-next-line no-console
-    console.log("Clockwork lead webhook result", json);
+    if (shouldDebugClockworkFunnel()) {
+      // eslint-disable-next-line no-console
+      console.log("Clockwork lead webhook result", json);
+    }
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("Clockwork lead webhook error", err);
+    if (shouldDebugClockworkFunnel()) {
+      // eslint-disable-next-line no-console
+      console.error("Clockwork lead webhook error", err);
+    }
   }
 }
 
@@ -1636,10 +1640,12 @@ function createClockworkPhotoUploadFolder(): string {
 async function uploadClockworkPhotos(files: File[]): Promise<UploadedPhoto[]> {
   if (files.length === 0) return [];
 
-  // eslint-disable-next-line no-console
-  console.log("[ClockworkCarpentry] photo upload started", {
-    count: files.length,
-  });
+  if (shouldDebugClockworkFunnel()) {
+    // eslint-disable-next-line no-console
+    console.log("[ClockworkCarpentry] photo upload started", {
+      count: files.length,
+    });
+  }
 
   const supabase = getSupabaseBrowserClient();
   const bucket = getSupabasePhotoBucket();
@@ -1668,8 +1674,10 @@ async function uploadClockworkPhotos(files: File[]): Promise<UploadedPhoto[]> {
     };
 
     uploaded.push(uploadedPhoto);
-    // eslint-disable-next-line no-console
-    console.log("[ClockworkCarpentry] uploaded photo", uploadedPhoto);
+    if (shouldDebugClockworkFunnel()) {
+      // eslint-disable-next-line no-console
+      console.log("[ClockworkCarpentry] uploaded photo", uploadedPhoto);
+    }
   }
 
   return uploaded;
@@ -1827,6 +1835,12 @@ export default function ClockworkCarpentryPage() {
     trackClockworkFunnelEvent(eventName, params);
   };
 
+  const fireCostCheckStartedOnce = (selectedCount: number) => {
+    fireFunnelOnce("cost_check_started", "clockwork_cost_check_started", {
+      selected_count: selectedCount,
+    });
+  };
+
   useEffect(() => {
     trackClockworkPageView();
     fireFunnelOnce("page_viewed", "clockwork_page_viewed");
@@ -1933,7 +1947,9 @@ export default function ClockworkCarpentryPage() {
       }
     }
 
-    fireFunnelOnce("cost_check_started", "clockwork_cost_check_started");
+    if (next.length > 0) {
+      fireCostCheckStartedOnce(next.length);
+    }
     trackClockworkFunnelEvent("clockwork_project_selected", {
       selected_project_types: next,
       selected_count: next.length,
@@ -2005,10 +2021,12 @@ export default function ClockworkCarpentryPage() {
     const photoFiles = Array.isArray(answers.photos)
       ? (answers.photos as File[])
       : [];
-    // eslint-disable-next-line no-console
-    console.log("[ClockworkCarpentry] buildSubmission photoFiles count", {
-      count: photoFiles.length,
-    });
+    if (shouldDebugClockworkFunnel()) {
+      // eslint-disable-next-line no-console
+      console.log("[ClockworkCarpentry] buildSubmission photoFiles count", {
+        count: photoFiles.length,
+      });
+    }
 
     const contact = isContactValue(answers.contact)
       ? {
@@ -2072,10 +2090,12 @@ export default function ClockworkCarpentryPage() {
     photoFiles: File[],
     logLabel: string,
   ) => {
-    // eslint-disable-next-line no-console
-    console.log("[ClockworkCarpentry] final submit photoFiles count", {
-      count: photoFiles.length,
-    });
+    if (shouldDebugClockworkFunnel()) {
+      // eslint-disable-next-line no-console
+      console.log("[ClockworkCarpentry] final submit photoFiles count", {
+        count: photoFiles.length,
+      });
+    }
 
     let finalPayload: Record<string, unknown> = payload;
 
@@ -2093,28 +2113,35 @@ export default function ClockworkCarpentryPage() {
           ...payload,
           photo_upload_error: message,
         };
-        // eslint-disable-next-line no-console
-        console.error("[ClockworkCarpentry] photo upload failed:", err);
+        if (shouldDebugClockworkFunnel()) {
+          // eslint-disable-next-line no-console
+          console.error("[ClockworkCarpentry] photo upload failed:", err);
+        }
       }
     }
 
     const photoUrls = Array.isArray(finalPayload.photo_urls)
       ? finalPayload.photo_urls
       : [];
-    // eslint-disable-next-line no-console
-    console.log("[ClockworkCarpentry] final photo_urls count", {
-      count: photoUrls.length,
-    });
-    // eslint-disable-next-line no-console
-    console.log(logLabel, finalPayload);
-    // eslint-disable-next-line no-console
-    console.log("[ClockworkCarpentry] final payload before webhook", finalPayload);
+    if (shouldDebugClockworkFunnel()) {
+      // eslint-disable-next-line no-console
+      console.log("[ClockworkCarpentry] final photo_urls count", {
+        count: photoUrls.length,
+      });
+      // eslint-disable-next-line no-console
+      console.log(logLabel, finalPayload);
+      // eslint-disable-next-line no-console
+      console.log("[ClockworkCarpentry] final payload before webhook", finalPayload);
+    }
     await sendLeadToWebhookAndTrack(finalPayload);
   };
 
   const goNext = () => {
     if (!currentStep) return;
     if (!isStepAnswered(currentStep, answers)) return;
+    if (stepIndex === 0 && selectedTypeIds.length > 0) {
+      fireCostCheckStartedOnce(selectedTypeIds.length);
+    }
     if (stepIndex < flow.length - 1) {
       if (currentStep.kind === "photos" && !hasSelectedPhoto) {
         fireFunnelOnce("photo_skipped", "clockwork_photo_skipped", {
@@ -2294,7 +2321,13 @@ export default function ClockworkCarpentryPage() {
                 disabled={!isStepAnswered(currentStep, answers)}
                 className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-orange-safety px-6 min-h-[48px] text-sm font-bold text-black-deep hover:bg-orange-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-safety"
               >
-                {isLastStep ? "Generate My Ballpark Range" : "Next"}
+                {stepIndex === 0 && selectedTypes.length === 0
+                  ? "Select a project to continue"
+                  : stepIndex === 0
+                    ? "Continue"
+                    : isLastStep
+                      ? "Generate My Ballpark Range"
+                      : "Next"}
                 <ArrowRight size={16} weight="bold" />
               </button>
             )}
@@ -2325,7 +2358,7 @@ export default function ClockworkCarpentryPage() {
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-safety px-6 min-h-[52px] text-sm font-bold text-black-deep hover:bg-orange-hover cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-orange-safety"
           >
             {stepIndex === 0 && selectedTypes.length === 0
-              ? "Start cost check"
+              ? "Select a project to continue"
               : isLastStep
                 ? "Generate My Ballpark Range"
                 : "Continue"}
@@ -2375,14 +2408,17 @@ function ProjectTypesStep({
       <div className="mt-6">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold text-white">
-            What are you planning?
+            Choose your project to start
           </h2>
           <span className="text-xs text-gray-text">
             {selectedLabels.length} selected
           </span>
         </div>
+        <p className="mt-1 text-xs text-white/80 leading-relaxed">
+          You&apos;ll see a realistic Sydney range after a few quick questions.
+        </p>
         <p className="mt-1 text-xs text-gray-text">
-          Choose everything that applies.
+          Tap one or more options below.
         </p>
         <p className="mt-2 text-xs text-gray-text leading-relaxed">
           Photo helps accuracy, but you can start without one.
@@ -2397,10 +2433,10 @@ function ProjectTypesStep({
                   type="button"
                   onClick={() => onToggle(opt.label)}
                   className={[
-                    "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors min-h-[52px] cursor-pointer sm:px-4 sm:py-3.5 sm:min-h-[60px]",
+                    "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all min-h-[54px] cursor-pointer active:scale-[0.99] sm:px-4 sm:py-3 sm:min-h-[62px]",
                     isSelected
-                      ? "border-2 border-orange-safety bg-orange-safety/10"
-                      : "border border-gray-light bg-gray-mid hover:border-orange-safety/50",
+                      ? "border-2 border-orange-safety bg-orange-safety/15 shadow-[inset_0_0_0_1px_rgba(255,122,24,0.35)]"
+                      : "border border-gray-light bg-gray-mid hover:border-orange-safety/70 hover:bg-gray-light/35",
                   ].join(" ")}
                 >
                   <span
@@ -2423,15 +2459,25 @@ function ProjectTypesStep({
                       <opt.icon size={20} weight="duotone" />
                     )}
                   </span>
-                  <span className="flex-1 text-[13px] sm:text-base font-medium leading-snug text-white">
-                    {opt.label}
+                  <span className="flex-1">
+                    <span className="block text-[13px] sm:text-base font-semibold leading-snug text-white">
+                      {opt.label}
+                    </span>
+                    <span
+                      className={[
+                        "mt-0.5 block text-[11px] font-medium leading-tight",
+                        isSelected ? "text-orange-safety" : "text-gray-text",
+                      ].join(" ")}
+                    >
+                      {isSelected ? "Selected" : "Tap to select"}
+                    </span>
                   </span>
                   <span
                     className={[
-                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors sm:h-6 sm:w-6",
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors sm:h-6 sm:w-6",
                       isSelected
                         ? "border-orange-safety bg-orange-safety text-black-deep"
-                        : "border-gray-light bg-transparent text-transparent",
+                        : "border-gray-light bg-black-deep/20 text-transparent group-hover:border-orange-safety/70",
                     ].join(" ")}
                   >
                     <Check size={14} weight="bold" />
