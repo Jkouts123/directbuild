@@ -8,6 +8,8 @@ export type AreaOpportunityReport = {
   fitLabel: string;
   trade: string;
   serviceArea: string;
+  serviceStates?: string[];
+  dataCoverageMode?: "nsw_enhanced" | "national";
   primaryRegionId?: string;
   primaryRegionLabel?: string;
   selectedRegionLabels?: string[];
@@ -159,6 +161,12 @@ export default function OpportunityReport({
   const competitors = report.signals?.competitors;
   const planning = report.signals?.planning;
   const propertySales = report.signals?.propertySales;
+  const isNationalReport =
+    report.dataCoverageMode === "national" ||
+    (report.primaryRegion?.state && report.primaryRegion.state !== "NSW") ||
+    (report.serviceStates &&
+      report.serviceStates.length > 0 &&
+      !report.serviceStates.some((state) => state.toUpperCase() === "NSW"));
   const planningKeywords =
     planning?.topDirectKeywords && planning.topDirectKeywords.length > 0
       ? planning.topDirectKeywords
@@ -249,7 +257,10 @@ export default function OpportunityReport({
             />
             <BreakdownItem
               label="Planning council"
-              value={report.planningCouncilName || "Pending"}
+              value={
+                report.planningCouncilName ||
+                (isNationalReport ? "Not available for this state yet" : "Pending")
+              }
             />
           </div>
         </section>
@@ -297,10 +308,28 @@ export default function OpportunityReport({
             <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-white/80">
               Local proof signals
             </h4>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            {isNationalReport && (
+              <p className="text-sm leading-relaxed text-white/58">
+                DirectBuild has assessed this area using competitor visibility
+                and your business economics. Planning/property movement layers
+                are currently strongest in NSW and will be expanded state by
+                state.
+              </p>
+            )}
+            <div
+              className={`grid grid-cols-1 gap-3 ${
+                isNationalReport ? "lg:grid-cols-4" : "lg:grid-cols-3"
+              }`}
+            >
               <SignalCard
                 title="Planning activity"
-                status={planning?.status === "success" ? "Active" : "Pending"}
+                status={
+                  planning?.status === "success"
+                    ? "Active"
+                    : isNationalReport
+                      ? "Not available"
+                      : "Pending"
+                }
                 rows={
                   planning?.status === "success"
                     ? [
@@ -316,17 +345,32 @@ export default function OpportunityReport({
                             : "n/a",
                         ],
                       ]
-                    : [["Status", "Pending/incomplete"]]
+                    : [
+                        [
+                          "Planning activity",
+                          isNationalReport
+                            ? "Not available for this state yet"
+                            : "Pending/incomplete",
+                        ],
+                      ]
                 }
                 note={
                   planning?.status === "success"
                     ? "Public NSW planning records show residential improvement activity in this lookup area."
-                    : "Planning records are pending for this lookup area."
+                    : isNationalReport
+                      ? "DirectBuild does not claim DA/CDC coverage outside NSW yet."
+                      : "Planning records are pending for this lookup area."
                 }
               />
               <SignalCard
                 title="Property movement"
-                status={propertySales?.status === "success" ? "Found" : "Pending"}
+                status={
+                  propertySales?.status === "success"
+                    ? "Found"
+                    : isNationalReport
+                      ? "Not available"
+                      : "Pending"
+                }
                 rows={
                   propertySales?.status === "success"
                     ? [
@@ -334,12 +378,21 @@ export default function OpportunityReport({
                         ["Recent sales", String(propertySales.salesCount ?? 0)],
                         ["Median sale price", medianSalePrice || "n/a"],
                       ]
-                    : [["Status", "Pending/incomplete"]]
+                    : [
+                        [
+                          "Property movement",
+                          isNationalReport
+                            ? "Not available for this state yet"
+                            : "Pending/incomplete",
+                        ],
+                      ]
                 }
                 note={
                   propertySales?.status === "success"
                     ? "Recent suburb-level sales can indicate upgrade triggers after purchase."
-                    : "Property movement data is pending for this lookup area."
+                    : isNationalReport
+                      ? "Official property movement layers will be expanded state by state."
+                      : "Property movement data is pending for this lookup area."
                 }
               />
               <SignalCard
@@ -359,6 +412,24 @@ export default function OpportunityReport({
                 }
                 note="This shows market presence, not guaranteed demand."
               />
+              {isNationalReport && report.copy.scoreBreakdownSummary && (
+                <SignalCard
+                  title="Business fit/economics"
+                  status="Available"
+                  rows={[
+                    [
+                      "Business economics",
+                      report.copy.scoreBreakdownSummary.businessEconomics,
+                    ],
+                    [
+                      "Capacity readiness",
+                      report.copy.scoreBreakdownSummary.capacityReadiness,
+                    ],
+                    ["Response speed", "Included"],
+                  ]}
+                  note="This uses your job value, capacity, close-rate, and response-speed inputs."
+                />
+              )}
             </div>
           </section>
           <ReportSection title="Main bottleneck">

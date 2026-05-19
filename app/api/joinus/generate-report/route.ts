@@ -272,6 +272,39 @@ function resolveNswPlanningArea(input: {
     : null;
 }
 
+function getNationalPlanningUnavailableResult(input: {
+  trade: string;
+  serviceArea: string;
+  stateLabel: string;
+}) {
+  return getNswPlanningUnavailableResult({
+    trade: input.trade,
+    serviceArea: input.serviceArea,
+    reason: `Planning activity: Not available for ${input.stateLabel} yet.`,
+  });
+}
+
+function getNationalPropertySalesUnavailableResult(input: {
+  serviceArea: string;
+  stateLabel: string;
+}) {
+  return {
+    source: "nsw_property_sales" as const,
+    status: "unavailable" as const,
+    serviceArea: input.serviceArea,
+    salesCount: undefined,
+    medianSalePrice: undefined,
+    propertyTurnoverSignal: undefined,
+    summary: {
+      propertyTurnoverSignal: "pending" as const,
+    },
+    notes: [
+      `Property movement: Not available for ${input.stateLabel} yet.`,
+      "Planning/property movement layers are currently strongest in NSW and will be expanded state by state.",
+    ],
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => null)) as
@@ -299,11 +332,17 @@ export async function POST(request: Request) {
         : requestedServiceArea;
     const competitorSearchArea =
       primaryRegion?.defaultCompetitorSearchArea || serviceArea;
-    const nswPlanningArea = includesNswServiceArea({
+    const shouldCheckNswPlanning = includesNswServiceArea({
       serviceStates,
       primaryRegion,
       serviceArea,
-    })
+    });
+    const primaryState =
+      primaryRegion?.state ||
+      serviceStates[0]?.toUpperCase() ||
+      (shouldCheckNswPlanning ? "NSW" : "");
+    const dataCoverageMode = shouldCheckNswPlanning ? "nsw_enhanced" : "national";
+    const nswPlanningArea = shouldCheckNswPlanning
       ? resolveNswPlanningArea({
           serviceArea,
           primaryRegion,
@@ -322,11 +361,6 @@ export async function POST(request: Request) {
     }
 
     const searchTrade = getSearchTradeLabel(trade);
-    const shouldCheckNswPlanning = includesNswServiceArea({
-      serviceStates,
-      primaryRegion,
-      serviceArea,
-    });
     const planningPromise =
       shouldCheckNswPlanning && nswPlanningArea
         ? getNswPlanningSignals({
@@ -364,17 +398,23 @@ export async function POST(request: Request) {
                 ? error.message
                 : "Unknown NSW Planning data error.",
           }))
-        : Promise.resolve(
-            getNswPlanningUnavailableResult({
-              trade,
-              serviceArea: planningUnavailableArea,
-              reason: shouldCheckNswPlanning
-                ? primaryRegion
+        : shouldCheckNswPlanning
+          ? Promise.resolve(
+              getNswPlanningUnavailableResult({
+                trade,
+                serviceArea: planningUnavailableArea,
+                reason: primaryRegion
                   ? `No supported NSW Planning council mapping exists yet for ${primaryRegion.label}.`
-                  : "No supported NSW Planning council mapping exists for this service area yet."
-                : "NSW Planning connector is only enabled for supported NSW service areas.",
-            }),
-          );
+                  : "No supported NSW Planning council mapping exists for this service area yet.",
+              }),
+            )
+          : Promise.resolve(
+              getNationalPlanningUnavailableResult({
+                trade,
+                serviceArea: planningUnavailableArea,
+                stateLabel: primaryState || "this state",
+              }),
+            );
     const propertySalesPromise =
       shouldCheckNswPlanning && dataLookupArea
         ? getNswPropertySalesSignals({
@@ -398,21 +438,12 @@ export async function POST(request: Request) {
                 ? error.message
                 : "Unknown NSW property sales data error.",
           }))
-        : Promise.resolve({
-            source: "nsw_property_sales" as const,
-            status: "unavailable" as const,
-            serviceArea: dataLookupArea,
-            salesCount: undefined,
-            medianSalePrice: undefined,
-            propertyTurnoverSignal: undefined,
-            summary: {
-              propertyTurnoverSignal: "pending" as const,
-            },
-            notes: [
-              "NSW property-sales lookup is only enabled for supported NSW primary lookup areas.",
-              "Unavailable property-sales data should be treated as pending, not as low property turnover.",
-            ],
-          });
+        : Promise.resolve(
+            getNationalPropertySalesUnavailableResult({
+              serviceArea: dataLookupArea,
+              stateLabel: primaryState || "this state",
+            }),
+          );
 
     const [competitorResult, planningResult, propertySalesResult] = await Promise.all([
       getLocalCompetitors({
@@ -477,6 +508,7 @@ export async function POST(request: Request) {
       regionFitNote: primaryRegion?.regionFitNote,
       selectedRegionLabels,
       primaryRegionLabel: primaryRegion?.label,
+      dataCoverageMode,
       propertySalesStatus: propertySalesResult.status,
       propertySalesServiceArea: propertySalesResult.serviceArea,
       propertySalesCount: propertySalesResult.salesCount,
@@ -502,6 +534,7 @@ export async function POST(request: Request) {
         serviceArea,
         serviceStates,
         serviceRegionIds,
+        dataCoverageMode,
         primaryRegionId: primaryRegion?.id,
         primaryRegionLabel: primaryRegion?.label,
         selectedRegionLabels,

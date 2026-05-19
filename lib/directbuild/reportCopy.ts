@@ -24,6 +24,7 @@ type ReportCopyInput = {
   regionFitNote?: string;
   selectedRegionLabels?: string[];
   primaryRegionLabel?: string;
+  dataCoverageMode?: "nsw_enhanced" | "national";
   propertySalesStatus?: string;
   propertySalesServiceArea?: string;
   propertySalesCount?: number;
@@ -252,6 +253,9 @@ function buildScoreBreakdownSummary(
           ? "Moderate"
           : "Light";
   const planningData =
+    input.dataCoverageMode === "national"
+      ? "Pending"
+      :
     input.planningStatus === "success"
       ? "Available"
       : input.planningStatus === "error" || input.planningStatus === "unavailable"
@@ -275,13 +279,16 @@ function buildScoreBreakdownSummary(
 export function buildReportCopy(input: ReportCopyInput): ReportCopyResult {
   const multipleRegions = (input.selectedRegionLabels?.length || 0) > 1;
   const regionFocus = input.primaryRegionLabel || input.serviceArea;
+  const nationalMode = input.dataCoverageMode === "national";
 
   return {
-    areaSummary: `This area has enough local proof to justify a measured test, but not broad scaling yet. The first move is to validate enquiry quality, quote follow-up, and booked-job conversion in ${regionFocus} before increasing ad spend.${
-      multipleRegions
-        ? " Because multiple regions were selected, start with the primary region before spreading budget wider."
-        : ""
-    }`,
+    areaSummary: nationalMode
+      ? "This report uses the available national layers first: competitor visibility, selected service area, job economics, capacity, and response speed. NSW has deeper planning/property layers already; other states will be expanded as DirectBuild adds official datasets."
+      : `This area has enough local proof to justify a measured test, but not broad scaling yet. The first move is to validate enquiry quality, quote follow-up, and booked-job conversion in ${regionFocus} before increasing ad spend.${
+          multipleRegions
+            ? " Because multiple regions were selected, start with the primary region before spreading budget wider."
+            : ""
+        }`,
     competitorSummary: buildCompetitorSummary(input),
     planningSummary: buildPlanningSummary(input),
     propertySalesSummary: buildPropertySalesSummary(input),
