@@ -2402,10 +2402,11 @@ function ProjectTypesStep({
   return (
     <div>
       <h1 className="text-[1.75rem] sm:text-[2.25rem] font-bold leading-[1.1] text-white">
-        What landscaping work are you planning?
+        Get a rough landscaping budget range in under 60 seconds.
       </h1>
       <p className="mt-3 text-sm sm:text-base text-gray-text leading-relaxed max-w-[52ch]">
-        Answer a few quick questions to get a rough project range before speaking with a contractor.
+        Built for Sydney homeowners planning turf, paving, garden beds, retaining
+        walls, poolside landscaping or full outdoor upgrades.
       </p>
 
       <div className="mt-7">
@@ -2418,7 +2419,8 @@ function ProjectTypesStep({
           </span>
         </div>
         <p className="mt-1 text-xs text-gray-text">
-          Choose the main work for this stage. You can separate future ideas later.
+          Pick the work you’re considering. We’ll ask a few quick questions and show
+          a broad preliminary range before you speak with a contractor.
         </p>
 
         <ul className="mt-4 grid gap-2.5">
